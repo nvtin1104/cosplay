@@ -10,11 +10,5 @@ RESEND_FROM = "Honey Shop <noreply@example.com>"
 [[d1_databases]]
 binding = "DB"
 database_name = "honey-shop-db"
-database_id = "00000000-0000-0000-0000-000000000001"
-preview_database_id = "honey-shop-local"
+database_id = "6bb1de6b-5613-4b00-88dc-9e0792b3e77c"
 migrations_dir = "migrations"
-
-# Uncomment after creating an R2 bucket:
-# [[r2_buckets]]
-# binding = "MEDIA"
-# bucket_name = "honey-shop-media"
