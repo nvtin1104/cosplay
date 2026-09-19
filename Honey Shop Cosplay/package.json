@@ -1,0 +1,16 @@
+{
+  "name": "honey-shop-cosplay",
+  "private": true,
+  "workspaces": ["web", "api"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace api\" \"npm run dev --workspace web\"",
+    "build": "npm run build --workspace api && npm run build --workspace web",
+    "lint": "npm run lint --workspace api && npm run lint --workspace web",
+    "db:migrate:local": "npm run db:migrate:local --workspace api",
+    "db:seed:local": "npm run db:seed:local --workspace api",
+    "deploy:api": "npm run deploy --workspace api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

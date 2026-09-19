@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+web/public/uploads/
+.wrangler/
+.dev.vars
+api/.dev.vars
+.vinext/
+*.tsbuildinfo
