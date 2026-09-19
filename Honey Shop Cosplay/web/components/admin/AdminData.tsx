@@ -1,6 +1,8 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Plus, ExternalLink } from 'lucide-react';
 import type { Post, Product } from '../../lib/types';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
@@ -89,7 +91,6 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
   const [items, setItems] = useState<Product[]>(initialProducts);
   const [loading, setLoading] = useState(initialProducts.length === 0);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(false);
 
   const load = () => {
     return api<Product[]>('/products')
@@ -107,30 +108,6 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
     }
   }, []);
 
-  async function create(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    try {
-      await api('/products', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: f.get('title'),
-          slug: f.get('slug'),
-          description: f.get('description'),
-          testPrice: Number(f.get('testPrice')),
-          fesPrice: Number(f.get('fesPrice')),
-          shootPrice: Number(f.get('shootPrice')),
-          totalQuantity: Number(f.get('totalQuantity')),
-          thumbnailUrl: f.get('thumbnailUrl'),
-        }),
-      });
-      setOpen(false);
-      void load();
-    } catch (e: any) {
-      setError(e.message);
-    }
-  }
-
   async function archive(id: string) {
     if (!confirm('Ẩn sản phẩm này khỏi storefront?')) return;
     await api(`/products/${id}`, { method: 'DELETE' });
@@ -140,24 +117,20 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
   return (
     <>
       {error && <State loading={false} error={error} />}
-      <div className="mb-5 flex justify-end">
-        <button onClick={() => setOpen(!open)} className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white">
-          {open ? 'Đóng form' : '+ Thêm sản phẩm'}
-        </button>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <p className="text-sm font-medium text-neutral-500">
+          Hiện có <b>{items.length}</b> sản phẩm trong catalog
+        </p>
+        <Link
+          href="/admin/products/new"
+          prefetch={true}
+          className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800 transition-colors"
+        >
+          <Plus size={16} />
+          <span>Thêm sản phẩm mới</span>
+        </Link>
       </div>
-      {open && (
-        <form onSubmit={create} className="admin-card mb-6 grid gap-4 p-6 md:grid-cols-2">
-          <input className="admin-input" name="title" placeholder="Tên sản phẩm" required />
-          <input className="admin-input" name="slug" placeholder="slug-san-pham" required />
-          <textarea className="admin-input md:col-span-2" name="description" placeholder="Mô tả" />
-          <input className="admin-input" name="testPrice" type="number" placeholder="Giá test" />
-          <input className="admin-input" name="fesPrice" type="number" placeholder="Giá fes" />
-          <input className="admin-input" name="shootPrice" type="number" placeholder="Giá shoot" />
-          <input className="admin-input" name="totalQuantity" type="number" min="1" defaultValue="1" />
-          <input className="admin-input md:col-span-2" name="thumbnailUrl" placeholder="/assets/production/34.png" />
-          <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white md:col-span-2">Lưu sản phẩm</button>
-        </form>
-      )}
+
       {loading && items.length === 0 ? (
         <State loading={true} error="" />
       ) : (
@@ -169,25 +142,88 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
                 <th>Giá test</th>
                 <th>Số lượng</th>
                 <th>Trạng thái</th>
-                <th></th>
+                <th className="text-right p-4">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {items.map((p) => (
-                <tr className="border-b border-neutral-100" key={p.id}>
+                <tr className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors" key={p.id}>
                   <td className="p-4">
-                    <b>{p.title}</b>
-                    <p className="text-xs text-neutral-400">{p.slug}</p>
+                    <div className="flex items-center gap-3">
+                      {p.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.thumbnailUrl}
+                          alt={p.title}
+                          className="h-11 w-11 shrink-0 rounded-lg object-cover border border-neutral-200"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-100 text-xs text-neutral-400">
+                          No img
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <b className="text-neutral-900">{p.title}</b>
+                          {p.isCombo && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                              Combo
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-neutral-400">
+                          <span>{p.slug}</span>
+                          {p.location && <span>• Vị trí: {p.location}</span>}
+                        </div>
+                      </div>
+                    </div>
                   </td>
-                  <td>{(p.testPrice || 0).toLocaleString('vi-VN')}đ</td>
-                  <td>{p.totalQuantity}</td>
-                  <td>
-                    <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold">{p.status}</span>
+                  <td className="font-semibold text-neutral-800">
+                    {(p.testPrice || 0).toLocaleString('vi-VN')} đ
                   </td>
                   <td>
-                    <button onClick={() => archive(p.id)} className="text-xs font-semibold text-neutral-500 underline">
-                      Ẩn
-                    </button>
+                    <span className="font-medium text-neutral-700">{p.totalQuantity}</span>
+                  </td>
+                  <td>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        p.status === 'AVAILABLE'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : p.status === 'RENTED'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                      }`}
+                    >
+                      {p.status === 'AVAILABLE'
+                        ? 'Sẵn sàng'
+                        : p.status === 'RENTED'
+                        ? 'Đang thuê'
+                        : p.status === 'MAINTENANCE'
+                        ? 'Bảo trì'
+                        : p.status}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="inline-flex items-center gap-3">
+                      <Link
+                        href={`/cosplay/${p.slug}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-black transition-colors"
+                        title="Xem trên storefront"
+                      >
+                        <ExternalLink size={14} />
+                        <span>Xem</span>
+                      </Link>
+                      <button
+                        onClick={() => archive(p.id)}
+                        className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        Ẩn
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

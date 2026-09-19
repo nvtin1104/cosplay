@@ -92,7 +92,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 }
               }}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-150 ${
-                path === href
+                path === href || (href !== '/admin' && path.startsWith(href))
                   ? 'bg-black text-white shadow-sm'
                   : 'text-neutral-600 hover:bg-neutral-100 hover:text-black active:scale-[0.98]'
               }`}
