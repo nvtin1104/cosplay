@@ -1,0 +1,3 @@
+export type Product = { id: string; slug: string; title: string; description?: string; testPrice: number; fesPrice: number; shootPrice: number; thumbnailUrl?: string; status: string; totalQuantity: number; location?: string; isCombo?: boolean; images?: { url: string; alt?: string }[]; variants?: { id: string; name: string; quantity: number }[] };
+export type Post = { id: string; slug: string; title: string; excerpt?: string; content: string; type: 'ARTICLE' | 'GUIDE'; status: string; coverUrl?: string };
+export type AuthUser = { id: string; email: string; name: string; role: 'ADMIN' | 'STAFF'; active: boolean };

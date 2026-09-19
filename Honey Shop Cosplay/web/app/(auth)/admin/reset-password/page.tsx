@@ -1,0 +1,2 @@
+import { Suspense } from 'react'; import { TokenForm } from '../../../../components/auth/AuthForm';
+export default function ResetPage(){return <main className="flex min-h-screen items-center justify-center bg-[#f5f5f5] p-6"><div className="admin-card w-full max-w-md p-8"><h1 className="text-3xl font-bold">Đặt mật khẩu mới</h1><p className="mt-2 text-sm text-neutral-500">Mật khẩu cần ít nhất 10 ký tự.</p><Suspense><TokenForm mode="reset"/></Suspense></div></main>}

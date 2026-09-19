@@ -1,0 +1,2 @@
+import Link from 'next/link'; import { ForgotForm } from '../../../../components/auth/AuthForm';
+export default function ForgotPage(){return <main className="flex min-h-screen items-center justify-center bg-[#f5f5f5] p-6"><div className="admin-card w-full max-w-md p-8"><Link href="/admin/login" className="text-sm text-neutral-500">← Đăng nhập</Link><h1 className="mt-6 text-3xl font-bold">Quên mật khẩu</h1><p className="mt-2 text-sm leading-6 text-neutral-500">Nhập email đã được mời vào hệ thống.</p><ForgotForm/></div></main>}

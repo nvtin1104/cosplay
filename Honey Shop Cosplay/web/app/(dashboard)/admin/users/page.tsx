@@ -1,0 +1,2 @@
+import { UserManager } from '../../../../components/admin/AdminData';
+export default function UsersPage(){return <div className="p-5 md:p-8"><p className="text-sm font-semibold text-neutral-400">ACCESS</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Nhân sự & lời mời</h1><p className="mt-2 text-sm text-neutral-500">Chỉ ADMIN có quyền quản lý tài khoản.</p><div className="mt-7"><UserManager/></div></div>}

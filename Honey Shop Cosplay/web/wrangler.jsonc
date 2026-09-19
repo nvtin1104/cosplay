@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "honey-shop-web",
+  "compatibility_date": "2026-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "API_ORIGIN": "http://localhost:8787"
+  },
+  "services": [
+    {
+      "binding": "API",
+      "service": "honey-shop-api"
+    }
+  ]
+}

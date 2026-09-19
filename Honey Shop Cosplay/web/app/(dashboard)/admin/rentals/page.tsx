@@ -1,0 +1,2 @@
+import { RentalManager } from '../../../../components/admin/AdminData';
+export default function RentalsPage(){return <div className="p-5 md:p-8"><p className="text-sm font-semibold text-neutral-400">BOOKINGS</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Lịch thuê</h1><p className="mt-2 text-sm text-neutral-500">Theo dõi giữ chỗ, tiền cọc và trạng thái trả đồ.</p><div className="mt-7"><RentalManager/></div></div>}

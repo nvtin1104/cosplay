@@ -1,0 +1,2 @@
+import { Suspense } from 'react'; import { TokenForm } from '../../../../components/auth/AuthForm';
+export default function InvitePage(){return <main className="flex min-h-screen items-center justify-center bg-[#f5f5f5] p-6"><div className="admin-card w-full max-w-md p-8"><h1 className="text-3xl font-bold">Tham gia Honey Shop</h1><p className="mt-2 text-sm text-neutral-500">Hoàn tất hồ sơ để nhận quyền quản lý.</p><Suspense><TokenForm mode="invite"/></Suspense></div></main>}

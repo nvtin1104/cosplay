@@ -1,0 +1,35 @@
+{
+  "name": "honey-shop-web",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "dev:cloudflare": "vinext dev",
+    "build": "next build",
+    "build:cloudflare": "vinext build",
+    "preview": "vinext preview",
+    "deploy": "vinext deploy",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vinext/cloudflare": "^1.0.0-beta.8",
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.25",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vinext": "^1.0.0-beta.10"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.56.0",
+    "@cloudflare/workers-types": "^5.20260919.1",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-rsc": "^0.5.35",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^8.0.0"
+  },
+  "type": "module"
+}
