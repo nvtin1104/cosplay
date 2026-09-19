@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ArrowUpRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { getProduct } from '../../../../lib/api';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + 'đ';
@@ -113,20 +113,20 @@ export default async function ProductPage({
               </p>
             </div>
 
-            {/* Nút đặt thuê */}
+            {/* Nút đặt thuê vuông vức */}
             <div className="mt-8 flex flex-wrap gap-4">
               <a
                 href="https://www.facebook.com/"
                 target="_blank"
                 rel="noreferrer"
-                className="sticker inline-flex items-center gap-2 rounded-full bg-[#ff9b35] px-8 py-4 font-extrabold text-white hover:bg-[#e88924] transition-all"
+                className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ff9b35] px-8 py-4 font-extrabold text-white shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]"
               >
                 <span>Nhắn Honey giữ lịch</span>
                 <ArrowUpRight size={18} />
               </a>
               <Link
                 href="/huong-dan"
-                className="inline-flex items-center gap-2 rounded-full border-2 border-[#24150e] bg-white px-6 py-4 font-extrabold text-[#24150e] hover:bg-[#ffe75c] transition-all"
+                className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-white px-6 py-4 font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e] hover:bg-[#ffe75c]"
               >
                 <span>Xem quy định thuê</span>
               </Link>

@@ -24,8 +24,9 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
             sizes="(max-width:768px) 100vw,33vw"
             className="object-cover transition duration-500 group-hover:scale-105"
           />
+          {/* Badge trạng thái vuông vức dạng sticker */}
           <span
-            className={`absolute left-4 top-4 rounded-full border-2 border-[#24150e] px-3 py-1 text-xs font-extrabold shadow-sm ${
+            className={`absolute left-4 top-4 border-2 border-[#24150e] px-3 py-1 text-xs font-extrabold shadow-[2px_3px_0_#24150e] ${
               accents[index % accents.length]
             }`}
           >

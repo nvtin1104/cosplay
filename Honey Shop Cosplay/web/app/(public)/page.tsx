@@ -31,16 +31,16 @@ export default async function HomePage() {
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
                 href="/cosplay"
-                className="sticker inline-flex items-center gap-2 rounded-full bg-[#ffe75c] px-6 py-3.5 font-extrabold text-[#24150e]"
+                className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-6 py-3.5 font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]"
               >
                 <span>Khám phá kho đồ</span>
                 <ArrowUpRight size={18} />
               </Link>
               <Link
                 href="#quy-trinh"
-                className="rounded-full border-2 border-[#24150e] bg-[#fff6dc] px-6 py-3.5 font-extrabold text-[#24150e] transition hover:bg-white"
+                className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#fff6dc] px-6 py-3.5 font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]"
               >
-                Thuê thế nào?
+                <span>Thuê thế nào?</span>
               </Link>
             </div>
           </div>
@@ -69,9 +69,9 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="absolute right-2 top-1 rotate-6 rounded-full border-2 border-[#24150e] bg-[#ffe75c] p-5 text-center shadow-[5px_6px_0_#24150e]">
+            <div className="absolute right-2 top-1 rotate-6 border-2 border-[#24150e] bg-[#ffe75c] p-4 text-center shadow-[5px_6px_0_#24150e]">
               <Heart className="mx-auto fill-[#ff9b35] text-[#24150e]" />
-              <b className="display text-lg text-[#24150e]">ảnh thật!</b>
+              <b className="display text-lg text-[#24150e] block mt-1">ảnh thật!</b>
             </div>
           </div>
         </div>
@@ -120,7 +120,7 @@ export default async function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="mt-10 rounded-3xl border-2 border-dashed border-[#24150e] p-10 text-center">
+            <div className="mt-10 border-2 border-dashed border-[#24150e] bg-white p-10 text-center shadow-[4px_5px_0_#24150e]">
               <b>Kho đồ đang được cập nhật.</b>
               <p className="mt-2 text-sm text-[#624b40]">
                 Hãy ghé xem các danh mục khác hoặc liên hệ fanpage nhé.
@@ -187,8 +187,8 @@ export default async function HomePage() {
                   />
                 </div>
               </div>
-              <div className="absolute bottom-5 right-0 rotate-6 rounded-2xl border-2 border-[#24150e] bg-[#ffe75c] px-5 py-4 text-[#24150e] shadow-[6px_7px_0_#24150e]">
-                <b>feedback thật 100%</b>
+              <div className="absolute bottom-5 right-0 rotate-6 border-2 border-[#24150e] bg-[#ffe75c] px-5 py-4 text-[#24150e] shadow-[6px_7px_0_#24150e]">
+                <b className="display text-base">feedback thật 100%</b>
               </div>
             </div>
           </Reveal>
@@ -267,10 +267,10 @@ export default async function HomePage() {
             </p>
             <Link
               href="/cosplay"
-              className="sticker mt-8 inline-flex items-center rounded-full bg-[#ffe75c] px-7 py-4 font-extrabold text-[#24150e]"
+              className="mt-8 inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-8 py-4 font-extrabold text-[#24150e] shadow-[5px_6px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[6px_7px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]"
             >
               <span>Bắt đầu chọn đồ</span>
-              <ArrowUpRight className="ml-2" />
+              <ArrowUpRight size={18} />
             </Link>
           </Reveal>
         </div>

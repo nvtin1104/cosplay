@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, Menu, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -23,17 +22,16 @@ export function PublicHeader() {
   return (
     <header className="sticky top-0 z-50 border-b-2 border-[#24150e] bg-[#fff6dc]/95 backdrop-blur-md">
       <div className="header-shell flex h-[74px] md:h-[84px] items-center justify-between gap-4">
-        {/* Logo chữ responsive */}
+        {/* Logo sticker vuông vức theo style badge */}
         <Link href="/" className="flex items-center shrink-0">
-          <div className="relative h-9 sm:h-11 md:h-12 w-auto">
-            <Image
-              src="/assets/logo.png"
-              alt="Honey Shop Cosplay"
-              width={260}
-              height={65}
-              priority
-              className="h-9 sm:h-11 md:h-12 w-auto object-contain"
-            />
+          <div className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-3.5 sm:px-4 py-1.5 sm:py-2 text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]">
+            <Sparkles size={18} className="text-[#24150e]" />
+            <span className="display text-xl sm:text-2xl font-extrabold tracking-tight leading-none">
+              honey shop
+            </span>
+            <span className="hidden lg:inline-block border-l-2 border-[#24150e]/30 pl-2 text-xs font-extrabold uppercase tracking-wider text-[#24150e]/80">
+              sài gòn
+            </span>
           </div>
         </Link>
 
@@ -56,22 +54,22 @@ export function PublicHeader() {
           </Link>
         </nav>
 
-        {/* Desktop CTA & Mobile Menu Button */}
+        {/* Desktop CTA & Mobile Menu Button - Dạng nút vuông vức */}
         <div className="flex items-center gap-3 shrink-0">
           <Link
             href="/cosplay"
-            className="sticker hidden items-center gap-2 rounded-full bg-[#ffe75c] px-5 py-2.5 text-sm font-extrabold text-[#24150e] md:inline-flex hover:bg-[#ffd93d]"
+            className="hidden md:inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-5 py-2.5 text-sm font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]"
           >
             <Sparkles size={16} />
             <span>Chọn nhân vật</span>
           </Link>
 
-          {/* Mobile hamburger button */}
+          {/* Mobile hamburger button dạng vuông */}
           <button
             type="button"
             aria-label={open ? 'Đóng menu' : 'Mở menu'}
             onClick={() => setOpen(!open)}
-            className="flex md:hidden items-center justify-center h-10 w-10 rounded-full border-2 border-[#24150e] bg-white text-[#24150e] shadow-[2px_3px_0_#24150e] active:translate-x-0.5 active:translate-y-0.5"
+            className="flex md:hidden items-center justify-center h-10 w-10 border-2 border-[#24150e] bg-white text-[#24150e] shadow-[3px_4px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5"
           >
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -98,7 +96,7 @@ export function PublicHeader() {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-full border-2 border-[#24150e] bg-white p-1 text-[#24150e] shadow-[2px_2px_0_#24150e]"
+                  className="border-2 border-[#24150e] bg-white p-1 text-[#24150e] shadow-[2px_2px_0_#24150e] active:translate-x-0.5 active:translate-y-0.5"
                 >
                   <X size={16} />
                 </button>
@@ -128,7 +126,7 @@ export function PublicHeader() {
                 <Link
                   onClick={() => setOpen(false)}
                   href="/cosplay"
-                  className="sticker flex items-center justify-center gap-2 rounded-full bg-[#ff9b35] py-3.5 text-center text-base font-extrabold text-white shadow-[4px_5px_0_#24150e]"
+                  className="flex items-center justify-center gap-2 border-2 border-[#24150e] bg-[#ff9b35] py-3.5 text-center text-base font-extrabold text-white shadow-[4px_5px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5"
                 >
                   <Sparkles size={18} />
                   <span>Chọn nhân vật ngay</span>
