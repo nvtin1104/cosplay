@@ -1,67 +1,62 @@
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import { getPosts } from '../../../lib/api';
 
 export default async function GuidePage() {
   const guides = (await getPosts()).filter((p) => p.type === 'GUIDE');
 
   return (
-    <main className="min-h-screen bg-[#fffdfa] py-16">
+    <main className="min-h-screen bg-[#fff6dc] py-16">
       <div className="shell">
-        <span className="inline-block rounded-full bg-[#fff5db] px-3.5 py-1 text-xs font-extrabold uppercase tracking-wider text-[#c25e00] border border-[#f5cb88]">
-          ✦ Hướng dẫn thuê đồ
-        </span>
-        <h1 className="display mt-3 max-w-4xl text-5xl font-extrabold leading-tight text-[#382313] md:text-7xl">
+        <p className="mb-4 inline-flex rotate-[-2deg] items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-4 py-1.5 text-xs font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e]">
+          <Sparkles size={14} /> how to rent · honey tips
+        </p>
+
+        <h1 className="display max-w-4xl text-5xl font-extrabold leading-[.9] text-[#24150e] md:text-8xl">
           Thuê đồ vui, trả đồ cũng thật nhẹ nhàng.
         </h1>
-        <p className="mt-3 max-w-2xl text-base text-[#73533c]">
+        <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#624b40] md:text-lg">
           Một vài lưu ý nhỏ giúp bạn có trải nghiệm thuê đồ cosplay trọn vẹn và thoải mái nhất cùng Honey Shop.
         </p>
 
+        {/* 3 bước thuê vuông vức / sticker */}
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {[
             {
               step: '01',
               title: 'Đo size chuẩn xác',
               desc: 'Đo số đo 3 vòng (ngực, eo, mông) và chiều cao/cân nặng để shop tư vấn size vừa vặn nhất.',
-              icon: '📏',
             },
             {
               step: '02',
               title: 'Kiểm tra lịch & cọc',
               desc: 'Shop xác nhận ngày cần đồ, tình trạng phụ kiện và hướng dẫn cọc giữ lịch rõ ràng.',
-              icon: '🗓️',
             },
             {
               step: '03',
               title: 'Bảo quản & hoàn trả',
               desc: 'Không tự ý giặt máy hay chỉnh sửa trang phục, kiểm tra đủ phụ kiện trước khi gửi lại shop.',
-              icon: '🧺',
             },
-          ].map((item) => (
+          ].map((item, i) => (
             <article
               key={item.step}
-              className="rounded-3xl border-2 border-[#ebd7be] bg-white p-8 shadow-[0_6px_24px_rgba(245,135,0,0.06)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[#f57400]"
+              className={`sticker min-h-64 p-7 ${
+                i === 1 ? 'bg-[#ffe75c] text-[#24150e]' : 'bg-white text-[#24150e]'
+              }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="display text-5xl font-extrabold text-[#f59b28]/35">
-                  {item.step}
-                </span>
-                <span className="text-3xl">{item.icon}</span>
-              </div>
-              <h2 className="display mt-4 text-2xl font-extrabold text-[#382313]">
-                {item.title}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-[#73533c]">
-                {item.desc}
-              </p>
+              <span className="display text-6xl font-extrabold text-[#ff9b35]">
+                {item.step}
+              </span>
+              <h2 className="display mt-4 text-3xl font-extrabold">{item.title}</h2>
+              <p className="mt-3 leading-7 text-[#624b40]">{item.desc}</p>
             </article>
           ))}
         </div>
 
+        {/* Danh sách bài hướng dẫn */}
         {guides.length > 0 && (
           <div className="mt-16">
-            <h2 className="display text-3xl font-extrabold text-[#382313]">
+            <h2 className="display text-4xl font-extrabold text-[#24150e]">
               Bài viết hướng dẫn chi tiết
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -69,13 +64,13 @@ export default async function GuidePage() {
                 <Link
                   key={g.id}
                   href={`/blog/${g.slug}`}
-                  className="group flex items-center justify-between rounded-2xl border border-[#ebd7be] bg-[#fffaf0] p-6 font-bold text-[#382313] transition-all hover:bg-white hover:border-[#f57400] hover:shadow-md"
+                  className="sticker flex items-center justify-between bg-white p-6 font-extrabold text-[#24150e] transition-all hover:bg-[#ffe75c]"
                 >
                   <span className="flex items-center gap-3">
-                    <CheckCircle2 size={18} className="text-[#f57400]" />
+                    <CheckCircle2 size={18} className="text-[#ff9b35]" />
                     <span>{g.title}</span>
                   </span>
-                  <ArrowRight size={18} className="text-[#f57400] transition-transform group-hover:translate-x-1" />
+                  <ArrowRight size={18} />
                 </Link>
               ))}
             </div>

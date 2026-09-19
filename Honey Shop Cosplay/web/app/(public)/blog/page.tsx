@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 import { getPosts } from '../../../lib/api';
 
 export const metadata: Metadata = {
@@ -12,42 +12,47 @@ export default async function BlogPage() {
   const posts = await getPosts();
 
   return (
-    <main className="min-h-screen bg-[#fffdfa] py-16">
+    <main className="min-h-screen bg-[#fff6dc] py-16">
       <div className="shell">
-        <span className="inline-block rounded-full bg-[#fff5db] px-3.5 py-1 text-xs font-extrabold uppercase tracking-wider text-[#c25e00] border border-[#f5cb88]">
-          ✦ Nhật ký & Chia sẻ
-        </span>
-        <h1 className="display mt-3 text-5xl font-extrabold text-[#382313] md:text-7xl">
+        <p className="mb-4 inline-flex rotate-[-2deg] items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-4 py-1.5 text-xs font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e]">
+          <Sparkles size={14} /> journal · honey stories
+        </p>
+
+        <h1 className="display max-w-4xl text-5xl font-extrabold leading-[.9] text-[#24150e] md:text-7xl">
           Chuyện ở Honey
         </h1>
-        <p className="mt-3 max-w-2xl text-base text-[#73533c]">
+        <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#624b40] md:text-lg">
           Nơi lưu giữ những câu chuyện cosplay đáng yêu, mẹo chọn trang phục và hướng dẫn đi fes trọn vẹn.
         </p>
 
-        <div className="mt-12 grid gap-7 md:grid-cols-2">
-          {posts.map((p) => (
+        <div className="mt-12 grid gap-8 md:grid-cols-2">
+          {posts.map((p, i) => (
             <Link
               href={`/blog/${p.slug}`}
               key={p.id}
-              className="group block rounded-3xl border-2 border-[#ebd7be] bg-white p-8 shadow-[0_6px_24px_rgba(245,135,0,0.06)] transition-all duration-300 hover:-translate-y-1.5 hover:border-[#f57400] hover:shadow-[0_12px_32px_rgba(245,135,0,0.12)]"
+              className={`sticker block min-h-72 p-8 transition hover:-translate-y-2 ${
+                i % 2 !== 0 ? 'bg-[#ff9b35] text-white' : 'bg-white text-[#24150e]'
+              }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="inline-block rounded-full bg-[#fff2db] px-3 py-1 text-xs font-extrabold uppercase tracking-wider text-[#b85900] border border-[#ffd58a]">
-                  {p.type === 'GUIDE' ? 'Hướng dẫn' : 'Bài viết'}
-                </span>
-                <BookOpen size={18} className="text-[#f57400]" />
-              </div>
+              <span
+                className={`text-xs font-extrabold uppercase tracking-widest ${
+                  i % 2 !== 0 ? 'text-[#ffe75c]' : 'text-[#ff9b35]'
+                }`}
+              >
+                {p.type === 'GUIDE' ? 'Hướng dẫn' : 'Bài viết'}
+              </span>
 
-              <h2 className="display mt-5 text-2xl font-extrabold leading-snug text-[#382313] transition-colors group-hover:text-[#f57400]">
+              <h2 className="display mt-5 text-3xl font-extrabold leading-snug md:text-4xl">
                 {p.title}
               </h2>
-              <p className="mt-3 text-sm leading-relaxed text-[#73533c] line-clamp-3">
+
+              <p className={`mt-4 leading-7 ${i % 2 !== 0 ? 'text-white/90' : 'text-[#624b40]'}`}>
                 {p.excerpt}
               </p>
 
-              <div className="mt-6 flex items-center gap-2 border-t border-[#f0ded0] pt-4 text-xs font-extrabold text-[#e06900]">
+              <div className="mt-8 flex items-center gap-2 font-extrabold">
                 <span>Đọc bài viết</span>
-                <ArrowRight size={14} className="transition-transform group-hover:translate-x-1" />
+                <ArrowRight size={16} />
               </div>
             </Link>
           ))}

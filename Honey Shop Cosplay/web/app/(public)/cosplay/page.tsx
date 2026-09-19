@@ -1,38 +1,40 @@
 import type { Metadata } from 'next';
+import { Sparkles } from 'lucide-react';
 import { ProductCard } from '../../../components/ProductCard';
 import { getProducts } from '../../../lib/api';
 
 export const metadata: Metadata = {
   title: 'Kho đồ cosplay',
-  description: 'Xem các set cosplay anime, game có ảnh thật, giá thuê và tình trạng có sẵn tại Honey Shop.',
+  description: 'Xem các set cosplay, giá test/fes/shoot và tình trạng đang có tại Honey Shop.',
 };
 
 export default async function CatalogPage() {
   const products = await getProducts();
 
   return (
-    <main className="min-h-screen bg-[#fffdfa] py-14">
+    <main className="min-h-screen bg-[#fff6dc] py-14">
       <div className="shell">
-        <span className="inline-block rounded-full bg-[#fff5db] px-3.5 py-1 text-xs font-extrabold uppercase tracking-wider text-[#c25e00] border border-[#f5cb88]">
-          ✦ Cosplay closet
-        </span>
-        <h1 className="display mt-3 max-w-4xl text-5xl font-extrabold leading-tight text-[#382313] md:text-7xl">
-          Chọn một nhân vật. Viết một câu chuyện.
-        </h1>
-        <p className="mt-3 max-w-2xl text-base text-[#73533c]">
-          Tất cả các set cosplay đều có ảnh thật tại shop, được giặt sấy thơm tho và kèm đầy đủ phụ kiện.
+        <p className="mb-4 inline-flex rotate-[-2deg] items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-4 py-1.5 text-xs font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e]">
+          <Sparkles size={14} /> cosplay closet · sài gòn
         </p>
 
-        {/* Filter categories */}
-        <div className="mt-8 flex flex-wrap gap-2.5">
+        <h1 className="display max-w-4xl text-5xl font-extrabold leading-[.9] text-[#24150e] md:text-8xl">
+          Chọn một nhân vật. Viết một câu chuyện.
+        </h1>
+        <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#624b40] md:text-lg">
+          Toàn bộ set đồ tại Honey đều có ảnh chụp thật 100%, được bảo quản thơm tho và kiểm tra phụ kiện kỹ càng trước ngày bạn nhận đồ.
+        </p>
+
+        {/* Filter categories theo style sticker vuông vức */}
+        <div className="mt-8 flex flex-wrap gap-3">
           {['Tất cả', 'Anime', 'Game', 'Fantasy', 'Có sẵn hôm nay'].map((x, i) => (
             <button
               key={x}
               type="button"
-              className={`rounded-full px-5 py-2 text-sm font-bold transition-all shadow-sm ${
+              className={`border-2 border-[#24150e] px-5 py-2 text-sm font-extrabold shadow-[3px_4px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5 ${
                 i === 0
-                  ? 'bg-gradient-to-r from-[#ff9b28] to-[#f57400] text-white shadow-[0_4px_12px_rgba(245,116,0,0.25)]'
-                  : 'border border-[#ebd7be] bg-white text-[#4e3422] hover:bg-[#fff7eb] hover:border-[#f58700]'
+                  ? 'bg-[#ffe75c] text-[#24150e]'
+                  : 'bg-white text-[#24150e] hover:bg-[#ffe75c]/60'
               }`}
             >
               {x}
@@ -42,16 +44,15 @@ export default async function CatalogPage() {
 
         {/* Product Grid */}
         {products.length ? (
-          <div className="mt-12 grid gap-7 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {products.map((p, i) => (
               <ProductCard key={p.id} product={p} index={i} />
             ))}
           </div>
         ) : (
-          <div className="mt-12 rounded-3xl border-2 border-dashed border-[#ebd7be] bg-[#fffaf0] p-12 text-center">
-            <span className="text-4xl">🍯</span>
-            <h2 className="display mt-3 text-3xl font-bold text-[#382313]">Kho đồ đang được cập nhật</h2>
-            <p className="mt-2 text-sm text-[#8c674b]">Hãy quay lại sau hoặc liên hệ shop để nhận catalogue chi tiết nhé!</p>
+          <div className="mt-12 border-2 border-dashed border-[#24150e] bg-white p-12 text-center shadow-[4px_5px_0_#24150e]">
+            <h2 className="display text-3xl font-extrabold text-[#24150e]">Kho đồ đang nghỉ một chút</h2>
+            <p className="mt-2 text-sm text-[#624b40]">Hãy quay lại sau hoặc liên hệ fanpage để được tư vấn các set đồ mới nhất nhé!</p>
           </div>
         )}
       </div>
