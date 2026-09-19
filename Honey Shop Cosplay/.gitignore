@@ -12,3 +12,5 @@ web/public/uploads/
 api/.dev.vars
 .vinext/
 *.tsbuildinfo
+out/
+web/out/

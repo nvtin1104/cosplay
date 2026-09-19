@@ -6,7 +6,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { products, productImages, productVariants, posts, rentals, rentalItems } from './db/schema';
 import { AppEnv, AppVariables, hashPassword, randomToken, requireAdmin, requireAuth, SESSION_COOKIE, sha256, validOrigin, verifyPassword } from './auth';
 
-const app = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>().basePath('/api/v1');
+const app = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>();
 const now = () => new Date().toISOString();
 const plusHours = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
 const safeUser = (user: any) => ({ id: user.id, email: user.email, name: user.name, role: user.role, active: !!user.active });
@@ -60,4 +60,41 @@ app.post('/admin/invitations', requireAuth, requireAdmin, async c => { const bod
 
 async function sendEmail(env: AppEnv, to: string, subject: string, link: string) { if (!env.RESEND_API_KEY) return; await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: env.RESEND_FROM, to: [to], subject, html: `<p>${subject}</p><p><a href="${link}">Mở liên kết bảo mật</a></p><p>Liên kết có thời hạn và chỉ dùng một lần.</p>` }) }); }
 
-export default app;
+const root = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>();
+root.route('/api/v1', app);
+root.get('/', c => c.html(`<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Honey Shop Cosplay API</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #fff6dc; color: #24150e; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 1.5rem; }
+    .card { background: #fff; border: 2px solid #24150e; box-shadow: 6px 7px 0 #24150e; padding: 2.2rem; max-width: 520px; width: 100%; }
+    .badge { background: #ffe75c; border: 2px solid #24150e; padding: 5px 12px; font-weight: 800; display: inline-block; margin-bottom: 1.2rem; font-size: 0.85rem; }
+    h1 { margin: 0 0 0.6rem; font-size: 1.8rem; letter-spacing: -0.02em; }
+    p { color: #624b40; line-height: 1.6; margin: 0 0 1.5rem; font-size: 0.95rem; }
+    .links { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; }
+    .link-item { border: 2px solid #24150e; padding: 11px 14px; background: #fffdfa; text-decoration: none; color: #24150e; font-weight: 800; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; }
+    .link-item:hover { background: #ffe75c; }
+    .primary-btn { display: block; background: #ff9b35; color: #fff; text-decoration: none; padding: 13px; font-weight: 800; text-align: center; border: 2px solid #24150e; box-shadow: 4px 5px 0 #24150e; font-size: 1rem; transition: transform 0.15s; }
+    .primary-btn:hover { background: #f0851d; transform: translate(-1px, -1px); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">🍯 HONEY SHOP COSPLAY · API WORKER</div>
+    <h1>Cloudflare Worker Sẵn Sàng!</h1>
+    <p>Hệ thống Backend API và cơ sở dữ liệu Cloudflare D1 đang hoạt động ổn định.</p>
+    <div class="links">
+      <a class="link-item" href="/api/v1/health"><span>Kiểm tra hệ thống (/api/v1/health)</span> <span>✓ 200 OK</span></a>
+      <a class="link-item" href="/api/v1/products"><span>Danh mục sản phẩm (/api/v1/products)</span> <span>JSON →</span></a>
+      <a class="link-item" href="/api/v1/posts"><span>Bài viết & Mẹo thuê (/api/v1/posts)</span> <span>JSON →</span></a>
+    </div>
+    <a class="primary-btn" href="/api/v1/products">Xem JSON dữ liệu sản phẩm ↗</a>
+  </div>
+</body>
+</html>`));
+
+export default root;

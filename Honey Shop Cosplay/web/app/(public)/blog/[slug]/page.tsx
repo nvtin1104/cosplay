@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { getPost } from '../../../../lib/api';
+import { getPost, getPosts } from '../../../../lib/api';
+
+export async function generateStaticParams() {
+  const posts = await getPosts();
+  return posts.map((p) => ({ slug: p.slug }));
+}
 
 export default async function ArticlePage({
   params,
