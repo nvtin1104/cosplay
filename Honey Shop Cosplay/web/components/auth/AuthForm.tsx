@@ -4,13 +4,136 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 export function LoginForm() {
-  const router=useRouter(), query=useSearchParams(); const [error,setError]=useState(''), [busy,setBusy]=useState(false);
-  async function submit(e:FormEvent<HTMLFormElement>){ e.preventDefault(); setBusy(true); setError(''); const form=new FormData(e.currentTarget); const res=await fetch('/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email:form.get('email'),password:form.get('password')})}); const data=await res.json(); setBusy(false); if(!res.ok){setError(data.message||'Không thể đăng nhập');return} router.push((query.get('next')||'/admin') as any); router.refresh(); }
-  return <form onSubmit={submit} className="mt-8 space-y-4"><label className="block text-sm font-semibold">Email<input className="admin-input mt-2" name="email" type="email" defaultValue="admin@honeyshop.local" required/></label><label className="block text-sm font-semibold">Mật khẩu<input className="admin-input mt-2" name="password" type="password" defaultValue="honey-demo-123" required/></label>{error&&<p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}<button disabled={busy} className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white disabled:opacity-50">{busy?'Đang xác thực…':'Đăng nhập'}</button><Link href="/admin/forgot-password" className="block text-center text-sm text-neutral-500 underline">Quên mật khẩu?</Link></form>;
+  const router = useRouter(), query = useSearchParams();
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    const form = new FormData(e.currentTarget);
+
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: form.get('email'),
+          password: form.get('password'),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({ message: 'Không nhận được dữ liệu phản hồi hợp lệ' }));
+      if (!res.ok) {
+        setError(data.message || 'Không thể đăng nhập');
+        return;
+      }
+
+      const nextUrl = query.get('next') || '/admin';
+      window.location.href = nextUrl;
+    } catch (err: any) {
+      setError(err?.message || 'Lỗi kết nối máy chủ');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} method="POST" action="#" className="mt-8 space-y-4">
+      <label className="block text-sm font-semibold">
+        Email
+        <input className="admin-input mt-2" name="email" type="email" defaultValue="admin@honeyshop.local" required />
+      </label>
+      <label className="block text-sm font-semibold">
+        Mật khẩu
+        <input className="admin-input mt-2" name="password" type="password" defaultValue="honey-demo-123" required />
+      </label>
+      {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      <button disabled={busy} className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white disabled:opacity-50">
+        {busy ? 'Đang xác thực…' : 'Đăng nhập'}
+      </button>
+      <Link href="/admin/forgot-password" className="block text-center text-sm text-neutral-500 underline">
+        Quên mật khẩu?
+      </Link>
+    </form>
+  );
 }
-export function TokenForm({mode}:{mode:'reset'|'invite'}) {
-  const router=useRouter(), query=useSearchParams(); const [message,setMessage]=useState('');
-  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=new FormData(e.currentTarget);const endpoint=mode==='reset'?'/api/v1/auth/reset-password':'/api/v1/auth/accept-invite';const body:any={token:query.get('token'),password:form.get('password')};if(mode==='invite')body.name=form.get('name');const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json();if(!res.ok){setMessage(data.message);return}setMessage('Hoàn tất. Đang chuyển về trang đăng nhập…');setTimeout(()=>router.push('/admin/login'),900)}
-  return <form onSubmit={submit} className="mt-8 space-y-4">{mode==='invite'&&<label className="block text-sm font-semibold">Tên hiển thị<input name="name" className="admin-input mt-2" required/></label>}<label className="block text-sm font-semibold">Mật khẩu mới<input name="password" type="password" minLength={10} className="admin-input mt-2" required/></label>{message&&<p className="text-sm text-neutral-600">{message}</p>}<button className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">Xác nhận</button></form>;
+
+export function TokenForm({ mode }: { mode: 'reset' | 'invite' }) {
+  const router = useRouter(), query = useSearchParams();
+  const [message, setMessage] = useState('');
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const endpoint = mode === 'reset' ? '/api/v1/auth/reset-password' : '/api/v1/auth/accept-invite';
+    const body: any = { token: query.get('token'), password: form.get('password') };
+    if (mode === 'invite') body.name = form.get('name');
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({ message: 'Không nhận được dữ liệu phản hồi hợp lệ' }));
+      if (!res.ok) {
+        setMessage(data.message || 'Có lỗi xảy ra');
+        return;
+      }
+      setMessage('Hoàn tất. Đang chuyển về trang đăng nhập…');
+      setTimeout(() => router.push('/admin/login'), 900);
+    } catch (err: any) {
+      setMessage(err?.message || 'Lỗi kết nối máy chủ');
+    }
+  }
+
+  return (
+    <form onSubmit={submit} method="POST" action="#" className="mt-8 space-y-4">
+      {mode === 'invite' && (
+        <label className="block text-sm font-semibold">
+          Tên hiển thị
+          <input name="name" className="admin-input mt-2" required />
+        </label>
+      )}
+      <label className="block text-sm font-semibold">
+        Mật khẩu mới
+        <input name="password" type="password" minLength={10} className="admin-input mt-2" required />
+      </label>
+      {message && <p className="text-sm text-neutral-600">{message}</p>}
+      <button className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">Xác nhận</button>
+    </form>
+  );
 }
-export function ForgotForm(){const [message,setMessage]=useState('');async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=new FormData(e.currentTarget);const res=await fetch('/api/v1/auth/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:form.get('email')})});const data=await res.json();setMessage(data.message||'Đã gửi yêu cầu.')}return <form onSubmit={submit} className="mt-8 space-y-4"><label className="block text-sm font-semibold">Email<input name="email" type="email" className="admin-input mt-2" required/></label>{message&&<p className="rounded-lg bg-neutral-100 p-3 text-sm">{message}</p>}<button className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">Gửi liên kết đặt lại</button></form>}
+
+export function ForgotForm() {
+  const [message, setMessage] = useState('');
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await fetch('/api/v1/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.get('email') }),
+      });
+      const data = await res.json().catch(() => ({ message: 'Không nhận được dữ liệu phản hồi hợp lệ' }));
+      setMessage(data.message || 'Đã gửi yêu cầu.');
+    } catch (err: any) {
+      setMessage(err?.message || 'Lỗi kết nối máy chủ');
+    }
+  }
+
+  return (
+    <form onSubmit={submit} method="POST" action="#" className="mt-8 space-y-4">
+      <label className="block text-sm font-semibold">
+        Email
+        <input name="email" type="email" className="admin-input mt-2" required />
+      </label>
+      {message && <p className="rounded-lg bg-neutral-100 p-3 text-sm">{message}</p>}
+      <button className="w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">Gửi liên kết đặt lại</button>
+    </form>
+  );
+}
