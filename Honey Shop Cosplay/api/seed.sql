@@ -1,0 +1,14 @@
+DELETE FROM rental_items; DELETE FROM rentals; DELETE FROM product_images; DELETE FROM product_variants; DELETE FROM products; DELETE FROM posts;
+INSERT OR IGNORE INTO users (id,email,name,role,password_hash,password_salt,active,created_at,updated_at) VALUES ('admin-demo','admin@honeyshop.local','Honey Admin','ADMIN','0sAIl73NAjNNROciNxzoNFTqMW0HZhMPt/5AOOy2Kqw=','IFcVAFx+IfR5esXadOooDg==',1,'2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z');
+INSERT INTO products VALUES ('p-gojo','gojo-satoru-infinity-set','Gojo Satoru — Infinity Set','Bộ cosplay nổi bật, phù hợp chụp studio và fes.',180000,220000,250000,'/assets/production/34.png','AVAILABLE',2,NULL,'Kệ A1',0,'2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z');
+INSERT INTO products VALUES ('p-anya','anya-forger-dress','Anya Forger Dress','Đầm Anya dễ thương, có sẵn phụ kiện tóc.',120000,150000,180000,'/assets/production/30.png','AVAILABLE',3,NULL,'Kệ B2',0,'2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z');
+INSERT INTO products VALUES ('p-witch','custom-witch-set','Little Witch Set','Combo váy, mũ và phụ kiện cho concept fantasy.',160000,200000,240000,'/assets/production/28.png','AVAILABLE',1,NULL,'Kệ C1',1,'2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z');
+INSERT INTO product_images VALUES ('img-gojo','p-gojo','/assets/production/34.png','Gojo cosplay','gallery');
+INSERT INTO product_images VALUES ('img-anya','p-anya','/assets/production/30.png','Anya cosplay','gallery');
+INSERT INTO product_images VALUES ('img-witch','p-witch','/assets/production/28.png','Fantasy cosplay','gallery');
+INSERT INTO product_variants VALUES ('v-gojo-m','p-gojo','M',1,'{}');
+INSERT INTO product_variants VALUES ('v-gojo-l','p-gojo','L',1,'{}');
+INSERT INTO product_variants VALUES ('v-anya-s','p-anya','S',1,'{}');
+INSERT INTO product_variants VALUES ('v-anya-m','p-anya','M',2,'{}');
+INSERT INTO posts VALUES ('post-size','cach-chon-size-do-cosplay','Cách chọn size đồ cosplay','Một vài mẹo để chọn size nhanh và chính xác.','Đo vòng ngực, eo và chiều dài trước khi đặt lịch thuê.',NULL,'GUIDE','PUBLISHED',NULL,NULL,'2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z');
+INSERT INTO posts VALUES ('post-fes','honey-shop-tai-le-hoi-mua-he','Honey Shop tại lễ hội mùa hè','Những set đồ được yêu thích nhất mùa này.','Cùng xem các set cosplay được khách hàng yêu thích.',NULL,'ARTICLE','PUBLISHED',NULL,NULL,'2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z','2026-09-19T00:00:00.000Z');
