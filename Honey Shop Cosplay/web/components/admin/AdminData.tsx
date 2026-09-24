@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, ExternalLink } from 'lucide-react';
-import type { Post, Product } from '../../lib/types';
+import type { AuthUser, Post, Product } from '../../lib/types';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -14,6 +14,32 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Có lỗi xảy ra');
   return data as T;
+}
+
+function useCurrentUser() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem('honey_admin_user');
+      if (cached) setUser(JSON.parse(cached));
+    } catch {}
+  }, []);
+  return user;
+}
+
+function LoadMore({ onClick, loading, hasMore }: { onClick: () => void; loading: boolean; hasMore: boolean }) {
+  if (!hasMore) return null;
+  return (
+    <div className="mt-4 flex justify-center">
+      <button
+        onClick={onClick}
+        disabled={loading}
+        className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
+      >
+        {loading ? 'Đang tải…' : 'Tải thêm'}
+      </button>
+    </div>
+  );
 }
 
 function State({ loading, error }: { loading: boolean; error: string }) {
@@ -87,20 +113,39 @@ export function DashboardData({ initialData }: { initialData?: { products: Produ
   );
 }
 
+const PAGE_SIZE = 30;
+
 export function ProductManager({ initialProducts = [] }: { initialProducts?: Product[] }) {
+  const user = useCurrentUser();
   const [items, setItems] = useState<Product[]>(initialProducts);
   const [loading, setLoading] = useState(initialProducts.length === 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(initialProducts.length >= PAGE_SIZE);
   const [error, setError] = useState('');
 
   const load = () => {
-    return api<Product[]>('/products')
+    return api<Product[]>(`/products?limit=${PAGE_SIZE}`)
       .then((data) => {
         setItems(data);
+        setHasMore(data.length >= PAGE_SIZE);
         setError('');
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const data = await api<Product[]>(`/products?limit=${PAGE_SIZE}&offset=${items.length}`);
+      setItems((prev) => [...prev, ...data]);
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (initialProducts.length === 0) {
@@ -110,8 +155,12 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
 
   async function archive(id: string) {
     if (!confirm('Ẩn sản phẩm này khỏi storefront?')) return;
-    await api(`/products/${id}`, { method: 'DELETE' });
-    void load();
+    try {
+      await api(`/products/${id}`, { method: 'DELETE' });
+      void load();
+    } catch (e: any) {
+      setError(e.message);
+    }
   }
 
   return (
@@ -217,12 +266,21 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
                         <ExternalLink size={14} />
                         <span>Xem</span>
                       </Link>
-                      <button
-                        onClick={() => archive(p.id)}
-                        className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
+                      <Link
+                        href={{ pathname: '/admin/products/edit', query: { id: p.id } }}
+                        prefetch={true}
+                        className="text-xs font-semibold text-neutral-600 hover:text-black transition-colors"
                       >
-                        Ẩn
-                      </button>
+                        Sửa
+                      </Link>
+                      {user?.role === 'ADMIN' && (
+                        <button
+                          onClick={() => archive(p.id)}
+                          className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
+                        >
+                          Ẩn
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -231,31 +289,165 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
           </table>
         </div>
       )}
+      <LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} />
     </>
   );
 }
 
+const RENTAL_STATUSES = ['HOLD', 'CONFIRMED', 'CANCELLED', 'RETURNED'] as const;
+
 export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] }) {
+  const user = useCurrentUser();
+  const isAdmin = user?.role === 'ADMIN';
   const [items, setItems] = useState<any[]>(initialRentals);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(initialRentals.length === 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(initialRentals.length >= PAGE_SIZE);
   const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<{ productId: string; quantity: number; price: number }[]>([]);
+  const [savingId, setSavingId] = useState('');
 
   const load = () => {
-    return api<any[]>('/rentals')
-      .then(setItems)
+    return api<any[]>(`/rentals?limit=${PAGE_SIZE}`)
+      .then((data) => {
+        setItems(data);
+        setHasMore(data.length >= PAGE_SIZE);
+        setError('');
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    if (initialRentals.length === 0) {
-      void load();
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const data = await api<any[]>(`/rentals?limit=${PAGE_SIZE}&offset=${items.length}`);
+      setItems((prev) => [...prev, ...data]);
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoadingMore(false);
     }
+  }
+
+  useEffect(() => {
+    if (initialRentals.length === 0) void load();
+    api<Product[]>('/products?limit=200').then(setProducts).catch(() => {});
   }, []);
+
+  function addRow() {
+    if (!products.length) return;
+    setRows((prev) => [...prev, { productId: products[0].id, quantity: 1, price: products[0].testPrice || 0 }]);
+  }
+  function updateRow(idx: number, patch: Partial<{ productId: string; quantity: number; price: number }>) {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+  function removeRow(idx: number) {
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function create(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    try {
+      await api('/rentals', {
+        method: 'POST',
+        body: JSON.stringify({
+          customerName: f.get('customerName'),
+          customerPhone: f.get('customerPhone'),
+          startDate: f.get('startDate'),
+          endDate: f.get('endDate'),
+          deposit: Number(f.get('deposit')) || 0,
+          totalAmount: Number(f.get('totalAmount')) || 0,
+          note: f.get('note'),
+          items: rows,
+        }),
+      });
+      setOpen(false);
+      setRows([]);
+      void load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  async function changeStatus(id: string, status: string) {
+    setSavingId(id);
+    try {
+      await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      void load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSavingId('');
+    }
+  }
 
   return (
     <>
       {error && <State loading={false} error={error} />}
+      <div className="mb-5 flex justify-end">
+        <button onClick={() => setOpen(!open)} className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white">
+          {open ? 'Đóng form' : '+ Tạo lịch thuê'}
+        </button>
+      </div>
+      {open && (
+        <form onSubmit={create} className="admin-card mb-6 grid gap-4 p-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <input className="admin-input" name="customerName" placeholder="Tên khách hàng" required />
+            <input className="admin-input" name="customerPhone" placeholder="Số điện thoại" />
+            <input className="admin-input" name="startDate" type="datetime-local" required />
+            <input className="admin-input" name="endDate" type="datetime-local" required />
+            <input className="admin-input" name="deposit" type="number" min="0" placeholder="Tiền cọc" />
+            <input className="admin-input" name="totalAmount" type="number" min="0" placeholder="Tổng tiền" />
+          </div>
+          <textarea className="admin-input" name="note" placeholder="Ghi chú" />
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Sản phẩm thuê</span>
+              <button type="button" onClick={addRow} className="text-xs font-semibold text-amber-600 hover:text-amber-700">
+                + Thêm sản phẩm
+              </button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {rows.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <select
+                    className="admin-input flex-1"
+                    value={row.productId}
+                    onChange={(e) => updateRow(idx, { productId: e.target.value })}
+                  >
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="admin-input w-20"
+                    type="number"
+                    min="1"
+                    value={row.quantity}
+                    onChange={(e) => updateRow(idx, { quantity: Number(e.target.value) || 1 })}
+                  />
+                  <input
+                    className="admin-input w-28"
+                    type="number"
+                    min="0"
+                    value={row.price}
+                    onChange={(e) => updateRow(idx, { price: Number(e.target.value) || 0 })}
+                  />
+                  <button type="button" onClick={() => removeRow(idx)} className="text-xs font-semibold text-red-500">
+                    Xóa
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white">Lưu lịch thuê</button>
+        </form>
+      )}
       {loading && items.length === 0 ? (
         <State loading={true} error="" />
       ) : (
@@ -272,22 +464,34 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
             </thead>
             <tbody>
               {items.length ? (
-                items.map((r) => (
-                  <tr className="border-b border-neutral-100" key={r.id}>
-                    <td className="p-4">
-                      <b>{r.customerName}</b>
-                      <p className="text-xs text-neutral-400">{r.customerPhone}</p>
-                    </td>
-                    <td>
-                      {new Date(r.startDate).toLocaleDateString('vi-VN')} — {new Date(r.endDate).toLocaleDateString('vi-VN')}
-                    </td>
-                    <td>{Number(r.deposit || 0).toLocaleString('vi-VN')}đ</td>
-                    <td>{Number(r.totalAmount || 0).toLocaleString('vi-VN')}đ</td>
-                    <td>
-                      <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold">{r.status}</span>
-                    </td>
-                  </tr>
-                ))
+                items.map((r) => {
+                  const locked = r.status === 'CONFIRMED' && !isAdmin;
+                  return (
+                    <tr className="border-b border-neutral-100" key={r.id}>
+                      <td className="p-4">
+                        <b>{r.customerName}</b>
+                        <p className="text-xs text-neutral-400">{r.customerPhone}</p>
+                      </td>
+                      <td>
+                        {new Date(r.startDate).toLocaleDateString('vi-VN')} — {new Date(r.endDate).toLocaleDateString('vi-VN')}
+                      </td>
+                      <td>{Number(r.deposit || 0).toLocaleString('vi-VN')}đ</td>
+                      <td>{Number(r.totalAmount || 0).toLocaleString('vi-VN')}đ</td>
+                      <td>
+                        <select
+                          className="rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-xs font-semibold disabled:opacity-60"
+                          value={r.status}
+                          disabled={locked || savingId === r.id}
+                          onChange={(e) => changeStatus(r.id, e.target.value)}
+                        >
+                          {RENTAL_STATUSES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={5} className="p-10 text-center text-neutral-400">
@@ -299,22 +503,45 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
           </table>
         </div>
       )}
+      <LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} />
     </>
   );
 }
 
 export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {
+  const user = useCurrentUser();
+  const isAdmin = user?.role === 'ADMIN';
   const [items, setItems] = useState<Post[]>(initialPosts);
   const [loading, setLoading] = useState(initialPosts.length === 0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(initialPosts.length >= PAGE_SIZE);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Post | null>(null);
 
   const load = () => {
-    return api<Post[]>('/posts')
-      .then(setItems)
+    return api<Post[]>(`/posts?limit=${PAGE_SIZE}`)
+      .then((data) => {
+        setItems(data);
+        setHasMore(data.length >= PAGE_SIZE);
+        setError('');
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const data = await api<Post[]>(`/posts?limit=${PAGE_SIZE}&offset=${items.length}`);
+      setItems((prev) => [...prev, ...data]);
+      setHasMore(data.length >= PAGE_SIZE);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (initialPosts.length === 0) {
@@ -322,49 +549,89 @@ export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {
     }
   }, []);
 
-  async function create(e: FormEvent<HTMLFormElement>) {
+  async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    const payload = {
+      title: f.get('title'),
+      slug: f.get('slug'),
+      excerpt: f.get('excerpt'),
+      content: f.get('content'),
+      type: f.get('type'),
+    };
     try {
-      await api('/posts', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: f.get('title'),
-          slug: f.get('slug'),
-          excerpt: f.get('excerpt'),
-          content: f.get('content'),
-          type: f.get('type'),
-          status: 'PUBLISHED',
-          publishedAt: new Date().toISOString(),
-        }),
-      });
-      setOpen(false);
+      if (editing) {
+        await api(`/posts/${editing.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        setEditing(null);
+      } else {
+        await api('/posts', { method: 'POST', body: JSON.stringify({ ...payload, status: 'DRAFT' }) });
+        setOpen(false);
+      }
       void load();
     } catch (e: any) {
       setError(e.message);
     }
   }
 
+  async function publish(id: string) {
+    try {
+      await api(`/posts/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'PUBLISHED' }) });
+      void load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('Xóa vĩnh viễn bài viết này?')) return;
+    try {
+      await api(`/posts/${id}`, { method: 'DELETE' });
+      void load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  const form = (post?: Post | null) => (
+    <form onSubmit={save} className="admin-card mb-6 grid gap-4 p-6">
+      <input className="admin-input" name="title" placeholder="Tiêu đề" defaultValue={post?.title} required />
+      <input className="admin-input" name="slug" placeholder="slug-bai-viet" defaultValue={post?.slug} required />
+      <select className="admin-input" name="type" defaultValue={post?.type || 'ARTICLE'}>
+        <option value="ARTICLE">Bài viết</option>
+        <option value="GUIDE">Hướng dẫn</option>
+      </select>
+      <textarea className="admin-input" name="excerpt" placeholder="Tóm tắt" defaultValue={post?.excerpt} />
+      <textarea className="admin-input min-h-40" name="content" placeholder="Nội dung" defaultValue={post?.content} required />
+      <div className="flex gap-3">
+        <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white">
+          {post ? 'Lưu thay đổi' : 'Lưu nháp'}
+        </button>
+        <button
+          type="button"
+          onClick={() => (post ? setEditing(null) : setOpen(false))}
+          className="rounded-lg border border-neutral-200 px-4 py-3 font-semibold text-neutral-600"
+        >
+          Hủy
+        </button>
+      </div>
+      {!post && <p className="text-xs text-neutral-400">Bài viết sẽ lưu ở dạng nháp{isAdmin ? '' : ' — cần ADMIN xuất bản'}.</p>}
+    </form>
+  );
+
   return (
     <>
       {error && <State loading={false} error={error} />}
-      <div className="mb-5 flex justify-end">
-        <button onClick={() => setOpen(!open)} className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white">
-          {open ? 'Đóng form' : '+ Viết bài'}
-        </button>
-      </div>
-      {open && (
-        <form onSubmit={create} className="admin-card mb-6 grid gap-4 p-6">
-          <input className="admin-input" name="title" placeholder="Tiêu đề" required />
-          <input className="admin-input" name="slug" placeholder="slug-bai-viet" required />
-          <select className="admin-input" name="type">
-            <option value="ARTICLE">Bài viết</option>
-            <option value="GUIDE">Hướng dẫn</option>
-          </select>
-          <textarea className="admin-input" name="excerpt" placeholder="Tóm tắt" />
-          <textarea className="admin-input min-h-40" name="content" placeholder="Nội dung" required />
-          <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white">Xuất bản</button>
-        </form>
+      {editing ? (
+        form(editing)
+      ) : (
+        <>
+          <div className="mb-5 flex justify-end">
+            <button onClick={() => setOpen(!open)} className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white">
+              {open ? 'Đóng form' : '+ Viết bài'}
+            </button>
+          </div>
+          {open && form(null)}
+        </>
       )}
       {loading && items.length === 0 ? (
         <State loading={true} error="" />
@@ -374,25 +641,49 @@ export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {
             <article className="admin-card p-5" key={p.id}>
               <div className="flex justify-between text-xs font-semibold text-neutral-400">
                 <span>{p.type}</span>
-                <span>{p.status}</span>
+                <span>{p.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Nháp'}</span>
               </div>
               <h2 className="mt-4 text-xl font-bold">{p.title}</h2>
               <p className="mt-2 text-sm leading-6 text-neutral-500">{p.excerpt}</p>
+              <div className="mt-4 flex items-center gap-4 border-t border-neutral-100 pt-3">
+                <button onClick={() => setEditing(p)} className="text-xs font-semibold text-neutral-600 hover:text-black">
+                  Sửa
+                </button>
+                {isAdmin && p.status !== 'PUBLISHED' && (
+                  <button onClick={() => publish(p.id)} className="text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                    Xuất bản
+                  </button>
+                )}
+                {isAdmin && (
+                  <button onClick={() => remove(p.id)} className="text-xs font-semibold text-red-500 hover:text-red-700">
+                    Xóa
+                  </button>
+                )}
+              </div>
             </article>
           ))}
         </div>
       )}
+      <LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} />
     </>
   );
 }
 
+function inviteStatus(invite: any): { label: string; className: string } {
+  if (invite.acceptedAt) return { label: 'Đã chấp nhận', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' };
+  if (new Date(invite.expiresAt) < new Date()) return { label: 'Đã hết hạn', className: 'bg-neutral-100 text-neutral-500 border border-neutral-200' };
+  return { label: 'Đang chờ', className: 'bg-amber-50 text-amber-700 border border-amber-200' };
+}
+
 export function UserManager() {
+  const me = useCurrentUser();
   const [users, setUsers] = useState<any[]>([]);
   const [invites, setInvites] = useState<any[]>([]);
   const [message, setMessage] = useState('');
+  const [savingId, setSavingId] = useState('');
 
   const load = () => {
-    return Promise.all([api<any[]>('/admin/users'), api<any[]>('/admin/invitations')])
+    return Promise.all([api<any[]>('/admin/users?limit=200'), api<any[]>('/admin/invitations?limit=200')])
       .then(([u, i]) => {
         setUsers(u);
         setInvites(i);
@@ -419,21 +710,56 @@ export function UserManager() {
     }
   }
 
+  async function updateUser(id: string, patch: { role?: string; active?: boolean }) {
+    setSavingId(id);
+    try {
+      await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      void load();
+    } catch (e: any) {
+      setMessage(e.message);
+    } finally {
+      setSavingId('');
+    }
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_.7fr]">
       <div className="admin-card overflow-hidden">
         <div className="border-b p-5">
           <h2 className="font-bold">Tài khoản</h2>
         </div>
-        {users.map((u) => (
-          <div className="flex items-center justify-between border-b p-5" key={u.id}>
-            <div>
-              <b>{u.name}</b>
-              <p className="text-sm text-neutral-500">{u.email}</p>
+        {users.map((u) => {
+          const isSelf = u.id === me?.id;
+          return (
+            <div className="flex items-center justify-between gap-3 border-b p-5" key={u.id}>
+              <div>
+                <b>{u.name}</b>
+                <p className="text-sm text-neutral-500">{u.email}</p>
+                {!u.active && <span className="text-xs font-semibold text-red-500">Đã khóa</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-xs font-semibold disabled:opacity-60"
+                  value={u.role}
+                  disabled={isSelf || savingId === u.id}
+                  onChange={(e) => updateUser(u.id, { role: e.target.value })}
+                >
+                  <option value="STAFF">STAFF</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+                <button
+                  disabled={isSelf || savingId === u.id}
+                  onClick={() => updateUser(u.id, { active: !u.active })}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-60 ${
+                    u.active ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}
+                >
+                  {u.active ? 'Khóa' : 'Mở khóa'}
+                </button>
+              </div>
             </div>
-            <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold">{u.role}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div>
         <form onSubmit={invite} className="admin-card p-5">
@@ -446,9 +772,26 @@ export function UserManager() {
           <button className="mt-3 w-full rounded-lg bg-black py-3 font-semibold text-white">Gửi lời mời</button>
           {message && <p className="mt-3 break-all text-xs leading-5 text-neutral-500">{message}</p>}
         </form>
-        <div className="admin-card mt-5 p-5">
+        <div className="admin-card mt-5 overflow-hidden p-5">
           <h2 className="font-bold">Lời mời gần đây</h2>
-          <p className="mt-2 text-sm text-neutral-500">{invites.length} lời mời đã tạo.</p>
+          <div className="mt-3 space-y-2">
+            {invites.length ? (
+              invites.map((i) => {
+                const st = inviteStatus(i);
+                return (
+                  <div key={i.id} className="flex items-center justify-between gap-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{i.email}</p>
+                      <p className="text-xs text-neutral-400">{i.role}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${st.className}`}>{st.label}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-neutral-500">Chưa có lời mời nào.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

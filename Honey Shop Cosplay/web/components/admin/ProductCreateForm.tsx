@@ -42,24 +42,32 @@ const SAMPLE_THUMBNAILS = [
   { label: 'Set 28', url: '/assets/production/28.png' },
 ];
 
-export function ProductCreateForm() {
+type EditableProduct = {
+  id: string; title: string; slug: string; description?: string;
+  testPrice: number; fesPrice: number; shootPrice: number; totalQuantity: number;
+  status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'; isCombo?: boolean;
+  location?: string; note?: string; thumbnailUrl?: string;
+};
+
+export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const isEdit = !!product;
 
   // Form states
-  const [title, setTitle] = useState('');
-  const [slug, setSlug] = useState('');
-  const [isSlugCustom, setIsSlugCustom] = useState(false);
-  const [description, setDescription] = useState('');
-  const [testPrice, setTestPrice] = useState<number | string>(120000);
-  const [fesPrice, setFesPrice] = useState<number | string>(250000);
-  const [shootPrice, setShootPrice] = useState<number | string>(180000);
-  const [totalQuantity, setTotalQuantity] = useState<number | string>(1);
-  const [status, setStatus] = useState<'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'>('AVAILABLE');
-  const [isCombo, setIsCombo] = useState(false);
-  const [location, setLocation] = useState('');
-  const [note, setNote] = useState('');
-  const [thumbnailUrl, setThumbnailUrl] = useState('/assets/production/34.png');
+  const [title, setTitle] = useState(product?.title || '');
+  const [slug, setSlug] = useState(product?.slug || '');
+  const [isSlugCustom, setIsSlugCustom] = useState(isEdit);
+  const [description, setDescription] = useState(product?.description || '');
+  const [testPrice, setTestPrice] = useState<number | string>(product?.testPrice ?? 120000);
+  const [fesPrice, setFesPrice] = useState<number | string>(product?.fesPrice ?? 250000);
+  const [shootPrice, setShootPrice] = useState<number | string>(product?.shootPrice ?? 180000);
+  const [totalQuantity, setTotalQuantity] = useState<number | string>(product?.totalQuantity ?? 1);
+  const [status, setStatus] = useState<'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'>(product?.status || 'AVAILABLE');
+  const [isCombo, setIsCombo] = useState(!!product?.isCombo);
+  const [location, setLocation] = useState(product?.location || '');
+  const [note, setNote] = useState(product?.note || '');
+  const [thumbnailUrl, setThumbnailUrl] = useState(product?.thumbnailUrl || '/assets/production/34.png');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -98,8 +106,8 @@ export function ProductCreateForm() {
     setError('');
     startTransition(async () => {
       try {
-        const response = await fetch('/api/v1/products', {
-          method: 'POST',
+        const response = await fetch(isEdit ? `/api/v1/products/${product!.id}` : '/api/v1/products', {
+          method: isEdit ? 'PATCH' : 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -120,7 +128,7 @@ export function ProductCreateForm() {
 
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.message || 'Không thể tạo sản phẩm. Vui lòng kiểm tra lại slug hoặc thông tin.');
+          throw new Error(data.message || 'Không thể lưu sản phẩm. Vui lòng kiểm tra lại slug hoặc thông tin.');
         }
 
         setSuccess(true);
@@ -129,7 +137,7 @@ export function ProductCreateForm() {
           router.refresh();
         }, 600);
       } catch (err: any) {
-        setError(err.message || 'Có lỗi xảy ra khi tạo sản phẩm.');
+        setError(err.message || 'Có lỗi xảy ra khi lưu sản phẩm.');
       }
     });
   }
@@ -147,7 +155,7 @@ export function ProductCreateForm() {
           Quay lại danh sách sản phẩm
         </Link>
         <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-          Catalog mới
+          {isEdit ? 'Chỉnh sửa' : 'Catalog mới'}
         </span>
       </div>
 
@@ -471,8 +479,10 @@ export function ProductCreateForm() {
               ) : success ? (
                 <>
                   <Check size={16} />
-                  Đã tạo thành công!
+                  {isEdit ? 'Đã lưu thay đổi!' : 'Đã tạo thành công!'}
                 </>
+              ) : isEdit ? (
+                'Lưu thay đổi'
               ) : (
                 'Lưu và đăng sản phẩm'
               )}
