@@ -39,12 +39,39 @@ app.post('/auth/reset-password', async c => { const body = await c.req.json<any>
 app.post('/auth/accept-invite', async c => { const body = await c.req.json<any>(); if (!body.password || body.password.length < 10) return c.json({ message: 'Mật khẩu cần ít nhất 10 ký tự' }, 400); const invite = await c.env.DB.prepare('SELECT * FROM invitations WHERE token_hash=? AND accepted_at IS NULL AND expires_at>?').bind(await sha256(body.token || ''), now()).first<any>(); if (!invite) return c.json({ message: 'Lời mời không hợp lệ hoặc đã hết hạn' }, 400); const pass = await hashPassword(body.password); const id = crypto.randomUUID(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO users (id,email,name,role,password_hash,password_salt,active,created_at,updated_at) VALUES (?,?,?,?,?,?,1,?,?)').bind(id, invite.email, body.name || invite.email.split('@')[0], invite.role, pass.hash, pass.salt, now(), now()), c.env.DB.prepare('UPDATE invitations SET accepted_at=? WHERE id=?').bind(now(), invite.id)]); return c.json({ ok: true }); });
 
 const parsePage = (c: any) => { const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 500); const offset = Math.max(Number(c.req.query('offset')) || 0, 0); return { limit, offset }; };
+const slugify = (value: string) => value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || crypto.randomUUID().slice(0, 8);
+
+async function attachTaxonomy(DB: D1Database, productId: string, body: any) {
+  const stmts: D1PreparedStatement[] = [];
+  if (Array.isArray(body.categoryIds)) {
+    stmts.push(DB.prepare('DELETE FROM product_categories WHERE product_id=?').bind(productId));
+    for (const categoryId of body.categoryIds) stmts.push(DB.prepare('INSERT INTO product_categories (product_id,category_id) VALUES (?,?)').bind(productId, categoryId));
+  }
+  if (Array.isArray(body.tagIds)) {
+    stmts.push(DB.prepare('DELETE FROM product_tags WHERE product_id=?').bind(productId));
+    for (const tagId of body.tagIds) stmts.push(DB.prepare('INSERT INTO product_tags (product_id,tag_id) VALUES (?,?)').bind(productId, tagId));
+  }
+  if (Array.isArray(body.comboItems)) {
+    stmts.push(DB.prepare('DELETE FROM product_combo_items WHERE combo_product_id=?').bind(productId));
+    for (const item of body.comboItems) stmts.push(DB.prepare('INSERT INTO product_combo_items (combo_product_id,item_product_id,quantity) VALUES (?,?,?)').bind(productId, item.productId, item.quantity || 1));
+  }
+  if (stmts.length) await DB.batch(stmts);
+}
+
+async function loadTaxonomy(DB: D1Database, productId: string) {
+  const [cats, tagRows, combo] = await Promise.all([
+    DB.prepare('SELECT c.id,c.name,c.slug,c.parent_id parentId FROM product_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.product_id=?').bind(productId).all(),
+    DB.prepare('SELECT t.id,t.name,t.slug FROM product_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.product_id=?').bind(productId).all(),
+    DB.prepare('SELECT pci.item_product_id productId, pci.quantity, p.title, p.slug, p.thumbnail_url thumbnailUrl FROM product_combo_items pci JOIN products p ON p.id=pci.item_product_id WHERE pci.combo_product_id=?').bind(productId).all(),
+  ]);
+  return { categories: cats.results, tags: tagRows.results, comboItems: combo.results };
+}
 
 app.get('/products', async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(products).where(sql`${products.status} != 'ARCHIVED'`).orderBy(desc(products.createdAt)).limit(limit).offset(offset)); });
-app.get('/products/id/:id', requireAuth, async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.id, c.req.param('id')!)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id))]); return c.json({ ...product, images, variants }); });
-app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.slug, c.req.param('slug'))).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id))]); return c.json({ ...product, images, variants }); });
-app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, createdAt: stamp, updatedAt: stamp }); return c.json(await db.select().from(products).where(eq(products.id, id)).get(), 201); });
-app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); await db.update(products).set({ ...body, updatedAt: now() }).where(eq(products.id, id)); return c.json(await db.select().from(products).where(eq(products.id, id)).get()); });
+app.get('/products/id/:id', requireAuth, async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.id, c.req.param('id')!)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
+app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.slug, c.req.param('slug'))).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
+app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
+app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const { categoryIds, tagIds, comboItems, ...patch } = body; await db.update(products).set({ ...patch, updatedAt: now() }).where(eq(products.id, id)); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }); });
 app.delete('/products/:id', requireAuth, requireAdmin, async c => { await drizzle(c.env.DB).update(products).set({ status: 'ARCHIVED', updatedAt: now() }).where(eq(products.id, c.req.param('id')!)); return c.json({ ok: true }); });
 
 app.get('/posts', async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(posts).orderBy(desc(posts.createdAt)).limit(limit).offset(offset)); });
@@ -56,6 +83,34 @@ app.delete('/posts/:id', requireAuth, requireAdmin, async c => { await drizzle(c
 app.get('/rentals', requireAuth, async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(rentals).orderBy(rentals.startDate).limit(limit).offset(offset)); });
 app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate); if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400); const db = drizzle(c.env.DB); for (const item of body.items || []) { const product = await db.select().from(products).where(eq(products.id, item.productId)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get(); if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409); } const id = crypto.randomUUID(); const stamp = now(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, body.customerPhone || null, start.toISOString(), end.toISOString(), body.status || 'HOLD', body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp), ...(body.items || []).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0))]); return c.json({ id }, 201); });
 app.patch('/rentals/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const current = await db.select().from(rentals).where(eq(rentals.id, id)).get(); if (!current) return c.json({ message: 'Rental not found' }, 404); if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận' }, 403); await db.update(rentals).set({ ...body, updatedAt: now() }).where(eq(rentals.id, id)); return c.json({ ok: true }); });
+
+app.get('/categories', async c => { const result = await c.env.DB.prepare('SELECT id,name,slug,parent_id parentId FROM categories ORDER BY name').all(); return c.json(result.results); });
+app.post('/categories', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên category là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,created_at) VALUES (?,?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), body.parentId || null, now()).run(); return c.json({ id, name: body.name.trim(), parentId: body.parentId || null }, 201); });
+app.delete('/categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
+
+app.get('/tags', async c => { const result = await c.env.DB.prepare('SELECT id,name,slug FROM tags ORDER BY name').all(); return c.json(result.results); });
+app.post('/tags', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên tag là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO tags (id,name,slug,created_at) VALUES (?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), now()).run(); return c.json({ id, name: body.name.trim() }, 201); });
+app.delete('/tags/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM tags WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
+
+app.post('/admin/uploads', requireAuth, async c => {
+  if (!c.env.MEDIA) return c.json({ message: 'Chưa cấu hình lưu trữ ảnh (R2 bucket)' }, 503);
+  const form = await c.req.formData();
+  const file = form.get('file');
+  if (!(file instanceof File)) return c.json({ message: 'Thiếu file ảnh' }, 400);
+  if (!file.type.startsWith('image/')) return c.json({ message: 'Chỉ hỗ trợ file ảnh' }, 400);
+  if (file.size > 8 * 1024 * 1024) return c.json({ message: 'Ảnh tối đa 8MB' }, 400);
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const key = `products/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+  await c.env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
+  return c.json({ url: `/api/v1/media/${key}` }, 201);
+});
+app.get('/media/*', async c => {
+  if (!c.env.MEDIA) return c.json({ message: 'Not found' }, 404);
+  const key = c.req.param('*') || '';
+  const object = await c.env.MEDIA.get(key);
+  if (!object) return c.json({ message: 'Not found' }, 404);
+  return new Response(object.body as any, { headers: { 'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream', 'Cache-Control': 'public, max-age=31536000, immutable' } });
+});
 
 app.get('/admin/users', requireAuth, requireAdmin, async c => { const { limit, offset } = parsePage(c); const result = await c.env.DB.prepare('SELECT id,email,name,role,active,created_at createdAt FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all(); return c.json(result.results); });
 app.patch('/admin/users/:id', requireAuth, requireAdmin, async c => { const body = await c.req.json<any>(); await c.env.DB.prepare('UPDATE users SET role=coalesce(?,role),active=coalesce(?,active),updated_at=? WHERE id=?').bind(body.role || null, typeof body.active === 'boolean' ? Number(body.active) : null, now(), c.req.param('id')).run(); if (body.active === false) await c.env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });

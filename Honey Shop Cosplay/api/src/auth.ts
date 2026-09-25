@@ -12,7 +12,7 @@ export async function hashPassword(password: string, saltValue?: string) { const
 export async function verifyPassword(password: string, salt: string, expected: string) { const { hash } = await hashPassword(password, salt); if (hash.length !== expected.length) return false; let diff = 0; for (let i = 0; i < hash.length; i++) diff |= hash.charCodeAt(i) ^ expected.charCodeAt(i); return diff === 0; }
 
 export type AuthUser = { id: string; email: string; name: string; role: 'ADMIN' | 'STAFF'; active: number };
-export type AppEnv = { DB: D1Database; CORS_ORIGIN?: string; APP_URL?: string; RESEND_API_KEY?: string; RESEND_FROM?: string };
+export type AppEnv = { DB: D1Database; MEDIA?: R2Bucket; CORS_ORIGIN?: string; APP_URL?: string; RESEND_API_KEY?: string; RESEND_FROM?: string };
 export type AppVariables = { user: AuthUser };
 
 export async function requireAuth(c: Context<{ Bindings: AppEnv; Variables: AppVariables }>, next: Next) {

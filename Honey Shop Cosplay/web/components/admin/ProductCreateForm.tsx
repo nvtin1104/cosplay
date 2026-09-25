@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, useTransition, type FormEvent } from 'react';
 import {
   ArrowLeft,
   Sparkles,
@@ -10,19 +10,14 @@ import {
   Check,
   AlertCircle,
   Loader2,
-  DollarSign,
-  Package,
-  Layers,
-  MapPin,
-  FileText,
-  Tag,
+  Upload,
 } from 'lucide-react';
 
 function slugify(text: string): string {
   return text
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[đĐ]/g, 'd')
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
@@ -35,19 +30,66 @@ function formatVnd(val: number | string): string {
   return num.toLocaleString('vi-VN') + ' đ';
 }
 
-const SAMPLE_THUMBNAILS = [
-  { label: 'Set 34', url: '/assets/production/34.png' },
-  { label: 'Set 25', url: '/assets/production/25.png' },
-  { label: 'Set 21', url: '/assets/production/21.png' },
-  { label: 'Set 28', url: '/assets/production/28.png' },
-];
+const STATUS_TABS = [
+  { value: 'AVAILABLE', label: 'Sẵn sàng' },
+  { value: 'RENTED', label: 'Đang thuê' },
+  { value: 'MAINTENANCE', label: 'Bảo trì' },
+  { value: 'ARCHIVED', label: 'Lưu trữ' },
+] as const;
+
+type Category = { id: string; name: string; slug: string; parentId: string | null };
+type TagItem = { id: string; name: string; slug: string };
+type SimpleProduct = { id: string; title: string; thumbnailUrl?: string; isCombo?: boolean; testPrice: number };
 
 type EditableProduct = {
   id: string; title: string; slug: string; description?: string;
   testPrice: number; fesPrice: number; shootPrice: number; totalQuantity: number;
   status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'; isCombo?: boolean;
-  location?: string; note?: string; thumbnailUrl?: string;
+  thumbnailUrl?: string;
+  categories?: Category[]; tags?: TagItem[]; comboItems?: { productId: string; quantity: number }[];
 };
+
+async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`/api/v1${path}`, { credentials: 'include', headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) }, ...options });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Có lỗi xảy ra');
+  return data as T;
+}
+
+function CategoryTree({
+  categories,
+  selected,
+  onToggle,
+  parentId = null,
+  depth = 0,
+}: {
+  categories: Category[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  parentId?: string | null;
+  depth?: number;
+}) {
+  const children = categories.filter((c) => (c.parentId || null) === parentId);
+  if (!children.length) return null;
+  return (
+    <div className={depth > 0 ? 'ml-4 border-l border-neutral-100 pl-3' : ''}>
+      {children.map((cat) => (
+        <div key={cat.id}>
+          <label className="flex items-center gap-2 py-1 text-sm">
+            <input
+              type="checkbox"
+              checked={selected.includes(cat.id)}
+              onChange={() => onToggle(cat.id)}
+              className="h-4 w-4 rounded border-neutral-300 text-black focus:ring-black"
+            />
+            {cat.name}
+          </label>
+          <CategoryTree categories={categories} selected={selected} onToggle={onToggle} parentId={cat.id} depth={depth + 1} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   const router = useRouter();
@@ -62,34 +104,118 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   const [testPrice, setTestPrice] = useState<number | string>(product?.testPrice ?? 120000);
   const [fesPrice, setFesPrice] = useState<number | string>(product?.fesPrice ?? 250000);
   const [shootPrice, setShootPrice] = useState<number | string>(product?.shootPrice ?? 180000);
-  const [totalQuantity, setTotalQuantity] = useState<number | string>(product?.totalQuantity ?? 1);
   const [status, setStatus] = useState<'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'>(product?.status || 'AVAILABLE');
   const [isCombo, setIsCombo] = useState(!!product?.isCombo);
-  const [location, setLocation] = useState(product?.location || '');
-  const [note, setNote] = useState(product?.note || '');
-  const [thumbnailUrl, setThumbnailUrl] = useState(product?.thumbnailUrl || '/assets/production/34.png');
+  const [thumbnailUrl, setThumbnailUrl] = useState(product?.thumbnailUrl || '');
+  const [uploading, setUploading] = useState(false);
+
+  // Taxonomy states
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>(product?.categories?.map((c) => c.id) || []);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryParent, setNewCategoryParent] = useState('');
+
+  const [tags, setTags] = useState<TagItem[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(product?.tags?.map((t) => t.id) || []);
+  const [newTagName, setNewTagName] = useState('');
+
+  const [availableProducts, setAvailableProducts] = useState<SimpleProduct[]>([]);
+  const [comboItems, setComboItems] = useState<{ productId: string; quantity: number }[]>(
+    product?.comboItems?.map((i) => ({ productId: i.productId, quantity: i.quantity })) || []
+  );
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    api<Category[]>('/categories').then(setCategories).catch(() => {});
+    api<TagItem[]>('/tags').then(setTags).catch(() => {});
+    api<SimpleProduct[]>('/products?limit=200').then(setAvailableProducts).catch(() => {});
+  }, []);
+
+  const comboCandidates = useMemo(
+    () => availableProducts.filter((p) => !p.isCombo && p.id !== product?.id),
+    [availableProducts, product?.id]
+  );
+
   // Auto slug generation on title change unless manually overridden
   const handleTitleChange = (val: string) => {
     setTitle(val);
-    if (!isSlugCustom) {
-      setSlug(slugify(val));
-    }
+    if (!isSlugCustom) setSlug(slugify(val));
   };
-
   const handleSlugChange = (val: string) => {
     setSlug(val);
     setIsSlugCustom(true);
   };
-
   const regenerateSlug = () => {
-    const generated = slugify(title);
-    setSlug(generated);
+    setSlug(slugify(title));
     setIsSlugCustom(false);
   };
+
+  function toggleCategory(id: string) {
+    setSelectedCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  function toggleTag(id: string) {
+    setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function addCategory() {
+    if (!newCategoryName.trim()) return;
+    try {
+      const created = await api<{ id: string }>('/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name: newCategoryName.trim(), parentId: newCategoryParent || null }),
+      });
+      const cat: Category = { id: created.id, name: newCategoryName.trim(), slug: slugify(newCategoryName), parentId: newCategoryParent || null };
+      setCategories((prev) => [...prev, cat]);
+      setSelectedCategoryIds((prev) => [...prev, cat.id]);
+      setNewCategoryName('');
+      setNewCategoryParent('');
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  async function addTag() {
+    if (!newTagName.trim()) return;
+    try {
+      const created = await api<{ id: string }>('/tags', { method: 'POST', body: JSON.stringify({ name: newTagName.trim() }) });
+      const tag: TagItem = { id: created.id, name: newTagName.trim(), slug: slugify(newTagName) };
+      setTags((prev) => [...prev, tag]);
+      setSelectedTagIds((prev) => [...prev, tag.id]);
+      setNewTagName('');
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  function toggleComboItem(productId: string) {
+    setComboItems((prev) =>
+      prev.some((i) => i.productId === productId)
+        ? prev.filter((i) => i.productId !== productId)
+        : [...prev, { productId, quantity: 1 }]
+    );
+  }
+  function setComboQuantity(productId: string, quantity: number) {
+    setComboItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity: Math.max(1, quantity) } : i)));
+  }
+
+  async function handleFileUpload(file: File) {
+    setUploading(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch('/api/v1/admin/uploads', { method: 'POST', credentials: 'include', body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Tải ảnh lên thất bại.');
+      setThumbnailUrl(data.url);
+    } catch (e: any) {
+      setError(e.message || 'Tải ảnh lên thất bại.');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -117,12 +243,13 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
             testPrice: Number(testPrice) || 0,
             fesPrice: Number(fesPrice) || 0,
             shootPrice: Number(shootPrice) || 0,
-            totalQuantity: Math.max(1, Number(totalQuantity) || 1),
+            totalQuantity: product?.totalQuantity ?? 1,
             status,
             isCombo,
-            location: location.trim(),
-            note: note.trim(),
             thumbnailUrl: thumbnailUrl.trim(),
+            categoryIds: selectedCategoryIds,
+            tagIds: selectedTagIds,
+            comboItems: isCombo ? comboItems : [],
           }),
         });
 
@@ -143,7 +270,7 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="w-full space-y-6">
       {/* Top back bar */}
       <div className="flex items-center justify-between">
         <Link
@@ -169,19 +296,16 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
       {success && (
         <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
           <Check size={18} className="shrink-0" />
-          <span>Sản phẩm đã được tạo thành công! Đang chuyển hướng về kho đồ…</span>
+          <span>{isEdit ? 'Đã lưu thay đổi! Đang chuyển hướng về kho đồ…' : 'Sản phẩm đã được tạo thành công! Đang chuyển hướng về kho đồ…'}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-3">
-        {/* Main 2 columns: General details, pricing, inventory */}
-        <div className="space-y-6 lg:col-span-2">
+      <form onSubmit={handleSubmit} className="grid gap-6 xl:grid-cols-[1fr_360px]">
+        {/* Main column */}
+        <div className="space-y-6">
           {/* Section 1: Basic Info */}
           <div className="admin-card p-6">
-            <h2 className="flex items-center gap-2 text-base font-bold">
-              <Package size={18} className="text-amber-600" />
-              Thông tin sản phẩm
-            </h2>
+            <h2 className="text-base font-bold">Thông tin sản phẩm</h2>
             <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
@@ -214,16 +338,14 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                     </button>
                   )}
                 </div>
-                <div className="relative mt-1">
-                  <input
-                    type="text"
-                    required
-                    value={slug}
-                    onChange={(e) => handleSlugChange(e.target.value)}
-                    placeholder="furina-genshin-impact"
-                    className="admin-input font-mono text-sm"
-                  />
-                </div>
+                <input
+                  type="text"
+                  required
+                  value={slug}
+                  onChange={(e) => handleSlugChange(e.target.value)}
+                  placeholder="furina-genshin-impact"
+                  className="admin-input mt-1 font-mono text-sm"
+                />
                 <p className="mt-1 text-xs text-neutral-400">
                   Đường dẫn hiển thị: <span className="font-mono text-neutral-600">/cosplay/{slug || '...'}</span>
                 </p>
@@ -253,148 +375,159 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                   <div>
                     <span className="text-sm font-semibold">Gói Combo / Full Set phụ kiện</span>
                     <p className="text-xs text-neutral-500">
-                      Đánh dấu nếu đây là set bao gồm trang phục kèm trọn bộ wig, giày và đạo cụ.
+                      Đánh dấu nếu đây là set gộp từ nhiều sản phẩm lẻ đã có trong kho.
                     </p>
                   </div>
                 </label>
               </div>
+
+              {isCombo && (
+                <div className="rounded-xl border border-neutral-200 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Sản phẩm trong combo</p>
+                  {comboCandidates.length === 0 ? (
+                    <p className="mt-2 text-sm text-neutral-400">Chưa có sản phẩm lẻ nào để chọn.</p>
+                  ) : (
+                    <div className="mt-2 max-h-64 space-y-1 overflow-y-auto">
+                      {comboCandidates.map((p) => {
+                        const picked = comboItems.find((i) => i.productId === p.id);
+                        return (
+                          <div key={p.id} className="flex items-center gap-3 rounded-lg py-1.5 hover:bg-neutral-50">
+                            <input
+                              type="checkbox"
+                              checked={!!picked}
+                              onChange={() => toggleComboItem(p.id)}
+                              className="h-4 w-4 rounded border-neutral-300 text-black focus:ring-black"
+                            />
+                            <span className="flex-1 text-sm">{p.title}</span>
+                            {picked && (
+                              <input
+                                type="number"
+                                min={1}
+                                value={picked.quantity}
+                                onChange={(e) => setComboQuantity(p.id, Number(e.target.value) || 1)}
+                                className="admin-input w-16 py-1 text-xs"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Section 2: Pricing */}
           <div className="admin-card p-6">
-            <h2 className="flex items-center gap-2 text-base font-bold">
-              <DollarSign size={18} className="text-emerald-600" />
-              Thiết lập giá thuê (VNĐ)
-            </h2>
-            <p className="mt-1 text-xs text-neutral-500">
-              Cung cấp các mức giá thuê tùy theo nhu cầu của khách hàng.
-            </p>
+            <h2 className="text-base font-bold">Thiết lập giá thuê (VNĐ)</h2>
+            <p className="mt-1 text-xs text-neutral-500">Cung cấp các mức giá thuê tùy theo nhu cầu của khách hàng.</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
-                  Giá test đồ
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={testPrice}
-                  onChange={(e) => setTestPrice(e.target.value)}
-                  className="admin-input mt-1 font-semibold"
-                  placeholder="0"
-                />
-                <p className="mt-1 text-xs text-emerald-600 font-medium">
-                  {formatVnd(testPrice)}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
-                  Giá fes (sự kiện)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={fesPrice}
-                  onChange={(e) => setFesPrice(e.target.value)}
-                  className="admin-input mt-1 font-semibold"
-                  placeholder="0"
-                />
-                <p className="mt-1 text-xs text-emerald-600 font-medium">
-                  {formatVnd(fesPrice)}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
-                  Giá shoot ảnh
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={shootPrice}
-                  onChange={(e) => setShootPrice(e.target.value)}
-                  className="admin-input mt-1 font-semibold"
-                  placeholder="0"
-                />
-                <p className="mt-1 text-xs text-emerald-600 font-medium">
-                  {formatVnd(shootPrice)}
-                </p>
-              </div>
+              {[
+                ['Giá test đồ', testPrice, setTestPrice],
+                ['Giá fes (sự kiện)', fesPrice, setFesPrice],
+                ['Giá shoot ảnh', shootPrice, setShootPrice],
+              ].map(([label, value, setter]: any) => (
+                <div key={label}>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">{label}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    className="admin-input mt-1 font-semibold"
+                    placeholder="0"
+                  />
+                  <p className="mt-1 text-xs font-medium text-emerald-600">{formatVnd(value)}</p>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Section 3: Inventory & Storage */}
+          {/* Section 3: Category */}
           <div className="admin-card p-6">
-            <h2 className="flex items-center gap-2 text-base font-bold">
-              <Layers size={18} className="text-blue-600" />
-              Kho & Bảo quản
-            </h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
-                  Số lượng sẵn có
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={totalQuantity}
-                  onChange={(e) => setTotalQuantity(e.target.value)}
-                  className="admin-input mt-1"
-                  placeholder="1"
-                />
-              </div>
+            <h2 className="text-base font-bold">Danh mục</h2>
+            <p className="mt-1 text-xs text-neutral-500">Ví dụ: Game &gt; Genshin Impact, Anime &gt; Naruto.</p>
+            <div className="mt-3 rounded-xl border border-neutral-200 p-3">
+              {categories.length === 0 ? (
+                <p className="text-sm text-neutral-400">Chưa có danh mục nào.</p>
+              ) : (
+                <CategoryTree categories={categories} selected={selectedCategoryIds} onToggle={toggleCategory} />
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                className="admin-input flex-1 min-w-[140px]"
+                placeholder="Tên danh mục mới"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+              />
+              <select className="admin-input w-44" value={newCategoryParent} onChange={(e) => setNewCategoryParent(e.target.value)}>
+                <option value="">Cấp gốc (VD: Game, Anime)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={addCategory} className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white">
+                Thêm
+              </button>
+            </div>
+          </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
-                  Vị trí trong kho
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Ví dụ: Kệ A1, Tủ đồ 3"
-                  className="admin-input mt-1"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
-                  Ghi chú nội bộ
-                </label>
-                <textarea
-                  rows={2}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Ghi chú về bảo quản, giặt ủi, hư hại nhỏ hoặc lưu ý khi giao nhận cho nhân viên..."
-                  className="admin-input mt-1 text-sm"
-                />
-              </div>
+          {/* Section 4: Tags */}
+          <div className="admin-card p-6">
+            <h2 className="text-base font-bold">Nhãn (Tags)</h2>
+            <p className="mt-1 text-xs text-neutral-500">Ví dụ: Đồ mới, Đồ sale, Hot.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tags.map((t) => (
+                <button
+                  type="button"
+                  key={t.id}
+                  onClick={() => toggleTag(t.id)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    selectedTagIds.includes(t.id) ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                  }`}
+                >
+                  {t.name}
+                </button>
+              ))}
+              {tags.length === 0 && <p className="text-sm text-neutral-400">Chưa có tag nào.</p>}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <input
+                className="admin-input flex-1"
+                placeholder="Tag mới, VD: Hot"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+              />
+              <button type="button" onClick={addTag} className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white">
+                Thêm
+              </button>
             </div>
           </div>
         </div>
 
         {/* Sidebar column: Status, Thumbnail, Save actions */}
         <div className="space-y-6">
-          {/* Status Box */}
+          {/* Status Tabs */}
           <div className="admin-card p-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">
-              Trạng thái sản phẩm
-            </h3>
-            <div className="mt-3">
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-                className="admin-input text-sm font-semibold"
-              >
-                <option value="AVAILABLE">🟢 Sẵn sàng cho thuê (Available)</option>
-                <option value="RENTED">🟡 Đang được thuê (Rented)</option>
-                <option value="MAINTENANCE">🔧 Đang bảo trì / Giặt là (Maintenance)</option>
-                <option value="ARCHIVED">⚪ Lưu trữ / Tạm ẩn (Archived)</option>
-              </select>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500">Trạng thái sản phẩm</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {STATUS_TABS.map((tab) => (
+                <button
+                  type="button"
+                  key={tab.value}
+                  onClick={() => setStatus(tab.value)}
+                  className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
+                    status === tab.value ? 'bg-black text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
             <p className="mt-2 text-xs text-neutral-400">
               Sản phẩm ở trạng thái &quot;Sẵn sàng&quot; sẽ lập tức xuất hiện trên trang chủ và danh mục tìm kiếm.
@@ -409,35 +542,32 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
             </h3>
 
             <div className="mt-3">
-              <label className="block text-xs font-medium text-neutral-600">URL ảnh (Nội bộ hoặc Link ngoài)</label>
+              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-300 py-4 text-sm font-semibold text-neutral-600 hover:border-black hover:text-black transition-colors">
+                {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                {uploading ? 'Đang tải lên…' : 'Tải ảnh lên'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleFileUpload(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-neutral-600">Hoặc nhập URL ảnh (link ngoài)</label>
               <input
                 type="text"
                 value={thumbnailUrl}
                 onChange={(e) => setThumbnailUrl(e.target.value)}
-                placeholder="/assets/production/34.png"
+                placeholder="https://... hoặc /assets/..."
                 className="admin-input mt-1 font-mono text-xs"
               />
-            </div>
-
-            {/* Quick Presets */}
-            <div className="mt-3">
-              <span className="text-[11px] font-semibold text-neutral-400 uppercase">Ảnh mẫu nhanh:</span>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {SAMPLE_THUMBNAILS.map((item) => (
-                  <button
-                    key={item.url}
-                    type="button"
-                    onClick={() => setThumbnailUrl(item.url)}
-                    className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                      thumbnailUrl === item.url
-                        ? 'bg-black text-white'
-                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Live Preview Box */}
