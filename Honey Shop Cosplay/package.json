@@ -3,12 +3,14 @@
   "private": true,
   "workspaces": ["web", "api"],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace api\" \"npm run dev --workspace web\"",
-    "build": "npm run build --workspace api && npm run build --workspace web",
-    "lint": "npm run lint --workspace api && npm run lint --workspace web",
-    "db:migrate:local": "npm run db:migrate:local --workspace api",
-    "db:seed:local": "npm run db:seed:local --workspace api",
-    "deploy:api": "npm run deploy --workspace api"
+    "dev": "concurrently -n \"API,WEB\" -c \"cyan,magenta\" \"pnpm --filter honey-shop-api dev\" \"pnpm --filter honey-shop-web dev\"",
+    "dev:all": "pnpm db:migrate:local && pnpm db:seed:local && pnpm dev",
+    "start": "pnpm dev",
+    "build": "pnpm --filter honey-shop-api build && pnpm --filter honey-shop-web build",
+    "lint": "pnpm --filter honey-shop-api lint && pnpm --filter honey-shop-web lint",
+    "db:migrate:local": "pnpm --filter honey-shop-api db:migrate:local",
+    "db:seed:local": "pnpm --filter honey-shop-api db:seed:local",
+    "deploy:api": "pnpm --filter honey-shop-api deploy"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

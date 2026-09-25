@@ -11,10 +11,12 @@ Monorepo MVP cho shop cho thuê đồ cosplay:
 
 ```bash
 npm install
-npm run db:migrate:local
-npm run db:seed:local
-npm run dev
+npm run dev:all
+# Hoặc: npm start
 ```
+
+*(Lệnh `dev:all` sẽ tự động chạy migrate DB, seed dữ liệu mẫu và bật đồng thời cả API lẫn Web)*
+
 
 Web public: `http://localhost:3000`  
 Admin demo: `http://localhost:3000/admin`  

@@ -1,0 +1,12 @@
+packages:
+  - 'api'
+  - 'web'
+
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+  - '@cloudflare/workerd-windows-64'

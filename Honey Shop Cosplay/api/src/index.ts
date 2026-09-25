@@ -104,9 +104,9 @@ app.post('/admin/uploads', requireAuth, async c => {
   await c.env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
   return c.json({ url: `/api/v1/media/${key}` }, 201);
 });
-app.get('/media/*', async c => {
+app.get('/media/:key{.*}', async c => {
   if (!c.env.MEDIA) return c.json({ message: 'Not found' }, 404);
-  const key = c.req.param('*') || '';
+  const key = c.req.param('key') || c.req.path.replace(/^(\/api\/v1)?\/media\//, '');
   const object = await c.env.MEDIA.get(key);
   if (!object) return c.json({ message: 'Not found' }, 404);
   return new Response(object.body as any, { headers: { 'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream', 'Cache-Control': 'public, max-age=31536000, immutable' } });
