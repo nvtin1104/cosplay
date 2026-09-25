@@ -84,17 +84,32 @@ app.get('/rentals', requireAuth, async c => { const { limit, offset } = parsePag
 app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate); if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400); const db = drizzle(c.env.DB); for (const item of body.items || []) { const product = await db.select().from(products).where(eq(products.id, item.productId)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get(); if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409); } const id = crypto.randomUUID(); const stamp = now(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, body.customerPhone || null, start.toISOString(), end.toISOString(), body.status || 'HOLD', body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp), ...(body.items || []).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0))]); return c.json({ id }, 201); });
 app.patch('/rentals/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const current = await db.select().from(rentals).where(eq(rentals.id, id)).get(); if (!current) return c.json({ message: 'Rental not found' }, 404); if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận' }, 403); await db.update(rentals).set({ ...body, updatedAt: now() }).where(eq(rentals.id, id)); return c.json({ ok: true }); });
 
-app.get('/categories', async c => { const result = await c.env.DB.prepare('SELECT id,name,slug,parent_id parentId FROM categories ORDER BY name').all(); return c.json(result.results); });
-app.post('/categories', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên category là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,created_at) VALUES (?,?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), body.parentId || null, now()).run(); return c.json({ id, name: body.name.trim(), slug: body.slug?.trim() || slugify(body.name), parentId: body.parentId || null }, 201); });
+app.get('/categories', async c => {
+  const result = await c.env.DB.prepare('SELECT c.id, c.name, c.slug, c.parent_id parentId, (SELECT COUNT(*) FROM product_categories pc WHERE pc.category_id = c.id) as productCount FROM categories c ORDER BY c.name').all();
+  return c.json(result.results);
+});
+app.post('/categories', requireAuth, async c => {
+  const body = await c.req.json<any>();
+  if (!body.name?.trim()) return c.json({ message: 'Tên danh mục là bắt buộc' }, 400);
+  const id = crypto.randomUUID();
+  const slug = body.slug?.trim() ? slugify(body.slug.trim()) : slugify(body.name);
+  await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,created_at) VALUES (?,?,?,?,?)').bind(id, body.name.trim(), slug, body.parentId || null, now()).run();
+  return c.json({ id, name: body.name.trim(), slug, parentId: body.parentId || null, productCount: 0 }, 201);
+});
 app.patch('/categories/:id', requireAuth, async c => {
-  const id = c.req.param('id')!; const body = await c.req.json<any>();
+  const id = c.req.param('id')!;
+  const body = await c.req.json<any>();
   if (body.parentId) {
     if (body.parentId === id) return c.json({ message: 'Danh mục không thể là cha của chính nó' }, 400);
     const all = await c.env.DB.prepare('SELECT id,parent_id parentId FROM categories').all<{ id: string; parentId: string | null }>();
     let cursor = all.results.find(x => x.id === body.parentId);
-    while (cursor?.parentId) { if (cursor.parentId === id) return c.json({ message: 'Không thể chuyển vào danh mục con của chính nó' }, 400); cursor = all.results.find(x => x.id === cursor!.parentId); }
+    while (cursor?.parentId) {
+      if (cursor.parentId === id) return c.json({ message: 'Không thể chuyển vào danh mục con của chính nó' }, 400);
+      cursor = all.results.find(x => x.id === cursor!.parentId);
+    }
   }
-  await c.env.DB.prepare('UPDATE categories SET name=coalesce(?,name),slug=coalesce(?,slug),parent_id=? WHERE id=?').bind(body.name?.trim() || null, body.slug?.trim() || null, body.parentId === undefined ? (await c.env.DB.prepare('SELECT parent_id FROM categories WHERE id=?').bind(id).first<any>())?.parent_id ?? null : (body.parentId || null), id).run();
+  const slug = body.slug !== undefined && body.slug !== null && body.slug.trim() !== '' ? slugify(body.slug) : null;
+  await c.env.DB.prepare('UPDATE categories SET name=coalesce(?,name),slug=coalesce(?,slug),parent_id=? WHERE id=?').bind(body.name?.trim() || null, slug, body.parentId === undefined ? (await c.env.DB.prepare('SELECT parent_id FROM categories WHERE id=?').bind(id).first<any>())?.parent_id ?? null : (body.parentId || null), id).run();
   return c.json({ ok: true });
 });
 app.delete('/categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });

@@ -6,13 +6,17 @@ export const metadata = {
 
 export default function CategoriesPage() {
   return (
-    <div className="p-5 md:p-8">
-      <p className="text-sm font-semibold text-neutral-400">CATALOG</p>
-      <h1 className="mt-1 text-3xl font-bold tracking-tight">Danh mục sản phẩm</h1>
-      <p className="mt-2 text-sm text-neutral-500">
-        Xây dựng cây danh mục theo cấp bậc, ví dụ: Game &gt; Genshin Impact, Anime &gt; Naruto.
-      </p>
-      <div className="mt-7">
+    <div className="p-5 md:p-8 max-w-7xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold tracking-wider text-amber-600 uppercase">CATALOG & TAXONOMY</p>
+          <h1 className="mt-1 text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Quản lý Cây danh mục</h1>
+          <p className="mt-1.5 text-sm text-neutral-500 max-w-2xl">
+            Phân loại trang phục và phụ kiện cosplay theo các tầng cấp bậc (Tầng 1: Gốc, Tầng 2: Nhóm/Series, Tầng 3+: Chi tiết). Mã Key (Slug) dùng làm định danh lọc URL trên trang người dùng.
+          </p>
+        </div>
+      </div>
+      <div className="mt-6">
         <CategoryManager />
       </div>
     </div>
