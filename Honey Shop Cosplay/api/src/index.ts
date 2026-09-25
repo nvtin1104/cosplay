@@ -85,11 +85,23 @@ app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any
 app.patch('/rentals/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const current = await db.select().from(rentals).where(eq(rentals.id, id)).get(); if (!current) return c.json({ message: 'Rental not found' }, 404); if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận' }, 403); await db.update(rentals).set({ ...body, updatedAt: now() }).where(eq(rentals.id, id)); return c.json({ ok: true }); });
 
 app.get('/categories', async c => { const result = await c.env.DB.prepare('SELECT id,name,slug,parent_id parentId FROM categories ORDER BY name').all(); return c.json(result.results); });
-app.post('/categories', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên category là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,created_at) VALUES (?,?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), body.parentId || null, now()).run(); return c.json({ id, name: body.name.trim(), parentId: body.parentId || null }, 201); });
+app.post('/categories', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên category là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,created_at) VALUES (?,?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), body.parentId || null, now()).run(); return c.json({ id, name: body.name.trim(), slug: body.slug?.trim() || slugify(body.name), parentId: body.parentId || null }, 201); });
+app.patch('/categories/:id', requireAuth, async c => {
+  const id = c.req.param('id')!; const body = await c.req.json<any>();
+  if (body.parentId) {
+    if (body.parentId === id) return c.json({ message: 'Danh mục không thể là cha của chính nó' }, 400);
+    const all = await c.env.DB.prepare('SELECT id,parent_id parentId FROM categories').all<{ id: string; parentId: string | null }>();
+    let cursor = all.results.find(x => x.id === body.parentId);
+    while (cursor?.parentId) { if (cursor.parentId === id) return c.json({ message: 'Không thể chuyển vào danh mục con của chính nó' }, 400); cursor = all.results.find(x => x.id === cursor!.parentId); }
+  }
+  await c.env.DB.prepare('UPDATE categories SET name=coalesce(?,name),slug=coalesce(?,slug),parent_id=? WHERE id=?').bind(body.name?.trim() || null, body.slug?.trim() || null, body.parentId === undefined ? (await c.env.DB.prepare('SELECT parent_id FROM categories WHERE id=?').bind(id).first<any>())?.parent_id ?? null : (body.parentId || null), id).run();
+  return c.json({ ok: true });
+});
 app.delete('/categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 
 app.get('/tags', async c => { const result = await c.env.DB.prepare('SELECT id,name,slug FROM tags ORDER BY name').all(); return c.json(result.results); });
-app.post('/tags', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên tag là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO tags (id,name,slug,created_at) VALUES (?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), now()).run(); return c.json({ id, name: body.name.trim() }, 201); });
+app.post('/tags', requireAuth, async c => { const body = await c.req.json<any>(); if (!body.name?.trim()) return c.json({ message: 'Tên tag là bắt buộc' }, 400); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO tags (id,name,slug,created_at) VALUES (?,?,?,?)').bind(id, body.name.trim(), body.slug?.trim() || slugify(body.name), now()).run(); return c.json({ id, name: body.name.trim(), slug: body.slug?.trim() || slugify(body.name) }, 201); });
+app.patch('/tags/:id', requireAuth, async c => { const body = await c.req.json<any>(); await c.env.DB.prepare('UPDATE tags SET name=coalesce(?,name),slug=coalesce(?,slug) WHERE id=?').bind(body.name?.trim() || null, body.slug?.trim() || null, c.req.param('id')).run(); return c.json({ ok: true }); });
 app.delete('/tags/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM tags WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 
 app.post('/admin/uploads', requireAuth, async c => {

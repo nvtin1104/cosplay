@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Box, CalendarDays, FileText, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react';
+import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import type { AuthUser } from '../../lib/types';
 
 const links = [
   ['/admin', 'Tổng quan', LayoutDashboard],
   ['/admin/products', 'Kho đồ', Box],
+  ['/admin/categories', 'Danh mục', FolderTree],
+  ['/admin/tags', 'Tags', Tags],
   ['/admin/rentals', 'Lịch thuê', CalendarDays],
   ['/admin/posts', 'Nội dung', FileText],
   ['/admin/users', 'Nhân sự', Users],
