@@ -85,7 +85,7 @@ app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any
 app.patch('/rentals/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const current = await db.select().from(rentals).where(eq(rentals.id, id)).get(); if (!current) return c.json({ message: 'Rental not found' }, 404); if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận' }, 403); await db.update(rentals).set({ ...body, updatedAt: now() }).where(eq(rentals.id, id)); return c.json({ ok: true }); });
 
 app.get('/categories', async c => {
-  const result = await c.env.DB.prepare('SELECT c.id, c.name, c.slug, c.parent_id parentId, (SELECT COUNT(*) FROM product_categories pc WHERE pc.category_id = c.id) as productCount FROM categories c ORDER BY c.name').all();
+  const result = await c.env.DB.prepare('SELECT c.id, c.name, c.slug, c.parent_id parentId, c.image_url imageUrl, coalesce(c.sort_order, 0) sortOrder, (SELECT COUNT(*) FROM product_categories pc WHERE pc.category_id = c.id) as productCount FROM categories c ORDER BY coalesce(c.sort_order, 0) ASC, c.name ASC').all();
   return c.json(result.results);
 });
 app.post('/categories', requireAuth, async c => {
@@ -93,8 +93,21 @@ app.post('/categories', requireAuth, async c => {
   if (!body.name?.trim()) return c.json({ message: 'Tên danh mục là bắt buộc' }, 400);
   const id = crypto.randomUUID();
   const slug = body.slug?.trim() ? slugify(body.slug.trim()) : slugify(body.name);
-  await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,created_at) VALUES (?,?,?,?,?)').bind(id, body.name.trim(), slug, body.parentId || null, now()).run();
-  return c.json({ id, name: body.name.trim(), slug, parentId: body.parentId || null, productCount: 0 }, 201);
+  const imageUrl = body.imageUrl?.trim() || null;
+  const sortOrder = Number(body.sortOrder) || 0;
+  await c.env.DB.prepare('INSERT INTO categories (id,name,slug,parent_id,image_url,sort_order,created_at) VALUES (?,?,?,?,?,?,?)').bind(id, body.name.trim(), slug, body.parentId || null, imageUrl, sortOrder, now()).run();
+  return c.json({ id, name: body.name.trim(), slug, parentId: body.parentId || null, imageUrl, sortOrder, productCount: 0 }, 201);
+});
+app.post('/categories/reorder', requireAuth, async c => {
+  const body = await c.req.json<{ items: { id: string; parentId: string | null; sortOrder: number }[] }>();
+  if (!Array.isArray(body.items)) return c.json({ message: 'items must be an array' }, 400);
+  const stmts = body.items.map(item =>
+    c.env.DB.prepare('UPDATE categories SET parent_id=?, sort_order=? WHERE id=?').bind(item.parentId || null, Number(item.sortOrder) || 0, item.id)
+  );
+  if (stmts.length > 0) {
+    await c.env.DB.batch(stmts);
+  }
+  return c.json({ ok: true });
 });
 app.patch('/categories/:id', requireAuth, async c => {
   const id = c.req.param('id')!;
@@ -109,7 +122,13 @@ app.patch('/categories/:id', requireAuth, async c => {
     }
   }
   const slug = body.slug !== undefined && body.slug !== null && body.slug.trim() !== '' ? slugify(body.slug) : null;
-  await c.env.DB.prepare('UPDATE categories SET name=coalesce(?,name),slug=coalesce(?,slug),parent_id=? WHERE id=?').bind(body.name?.trim() || null, slug, body.parentId === undefined ? (await c.env.DB.prepare('SELECT parent_id FROM categories WHERE id=?').bind(id).first<any>())?.parent_id ?? null : (body.parentId || null), id).run();
+  const current = await c.env.DB.prepare('SELECT parent_id, image_url, sort_order FROM categories WHERE id=?').bind(id).first<any>();
+  if (!current) return c.json({ message: 'Không tìm thấy danh mục' }, 404);
+  const nextParentId = body.parentId === undefined ? current.parent_id : (body.parentId || null);
+  const nextImageUrl = body.imageUrl === undefined ? current.image_url : (body.imageUrl?.trim() || null);
+  const nextSortOrder = body.sortOrder === undefined ? current.sort_order : (Number(body.sortOrder) || 0);
+
+  await c.env.DB.prepare('UPDATE categories SET name=coalesce(?,name),slug=coalesce(?,slug),parent_id=?,image_url=?,sort_order=? WHERE id=?').bind(body.name?.trim() || null, slug, nextParentId, nextImageUrl, nextSortOrder, id).run();
   return c.json({ ok: true });
 });
 app.delete('/categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });

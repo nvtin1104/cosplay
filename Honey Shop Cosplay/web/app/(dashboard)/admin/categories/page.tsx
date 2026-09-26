@@ -1,7 +1,10 @@
 import { CategoryManager } from '../../../../components/admin/CategoryTagManager';
 
+// Dynamic server component to ensure fresh load
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
-  title: 'Danh mục | Honey Admin',
+  title: 'Quản lý Cây danh mục | Honey Admin',
 };
 
 export default function CategoriesPage() {

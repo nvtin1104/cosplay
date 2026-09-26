@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   Plus,
   Pencil,
@@ -20,6 +20,11 @@ import {
   Search,
   ChevronsUpDown,
   ChevronsDownUp,
+  GripVertical,
+  Image as ImageIcon,
+  Upload,
+  Loader2,
+  Link as LinkIcon,
 } from 'lucide-react';
 import type { AuthUser, Category, ProductTag } from '../../lib/types';
 
@@ -116,6 +121,136 @@ function CopyKeyButton({ text }: { text: string }) {
   );
 }
 
+function CategoryImageField({
+  value,
+  onChange,
+  label = 'Hình ảnh danh mục',
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label?: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlDraft, setUrlDraft] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/v1/admin/uploads', {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Tải ảnh thất bại');
+      onChange(data.url);
+    } catch (err: any) {
+      alert(err.message || 'Lỗi tải ảnh');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-semibold text-neutral-700 flex items-center gap-1.5">
+          <ImageIcon size={13} className="text-amber-600" />
+          {label}
+        </label>
+        <button
+          type="button"
+          onClick={() => setShowUrlInput(!showUrlInput)}
+          className="text-[10px] text-neutral-500 hover:text-black flex items-center gap-1"
+        >
+          <LinkIcon size={10} />
+          {showUrlInput ? 'Ẩn nhập link' : 'Dán link URL'}
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2.5">
+        {value ? (
+          <div className="relative group w-12 h-12 rounded-lg border border-neutral-200 overflow-hidden bg-neutral-100 flex-shrink-0 shadow-xs">
+            <img src={value} alt="Preview" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              title="Xóa ảnh"
+              className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="w-12 h-12 rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-center text-neutral-400 flex-shrink-0">
+            <ImageIcon size={18} />
+          </div>
+        )}
+
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 px-2.5 py-1.5 text-xs font-semibold text-neutral-700 transition disabled:opacity-50"
+            >
+              {uploading ? <Loader2 size={13} className="animate-spin text-amber-600" /> : <Upload size={13} />}
+              <span>{uploading ? 'Đang tải...' : value ? 'Đổi ảnh' : 'Tải ảnh lên'}</span>
+            </button>
+            {value && (
+              <button
+                type="button"
+                onClick={() => onChange('')}
+                className="text-xs text-red-600 hover:underline"
+              >
+                Gỡ ảnh
+              </button>
+            )}
+          </div>
+          {showUrlInput && (
+            <div className="flex items-center gap-1.5 pt-1">
+              <input
+                className="admin-input py-1 text-xs"
+                placeholder="https://... dán link ảnh trực tiếp"
+                value={urlDraft}
+                onChange={(e) => setUrlDraft(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (urlDraft.trim()) {
+                    onChange(urlDraft.trim());
+                    setUrlDraft('');
+                    setShowUrlInput(false);
+                  }
+                }}
+                className="rounded-lg bg-black px-2.5 py-1 text-xs font-semibold text-white whitespace-nowrap"
+              >
+                Gán
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TIER_STYLES = [
   {
     tier: 1,
@@ -158,7 +293,13 @@ function CategoryNode({
   isAdmin,
   searchQuery,
   expandedIds,
+  draggedCat,
+  hoverDropId,
   toggleExpand,
+  onDragStartNode,
+  onDragOverNode,
+  onDragLeaveNode,
+  onDropOnNode,
   onChanged,
   setError,
 }: {
@@ -168,7 +309,13 @@ function CategoryNode({
   isAdmin: boolean;
   searchQuery: string;
   expandedIds: Set<string>;
+  draggedCat: CategoryWithMeta | null;
+  hoverDropId: string | null;
   toggleExpand: (id: string) => void;
+  onDragStartNode: (cat: CategoryWithMeta) => void;
+  onDragOverNode: (e: React.DragEvent, cat: CategoryWithMeta) => void;
+  onDragLeaveNode: () => void;
+  onDropOnNode: (cat: CategoryWithMeta) => void;
   onChanged: () => void;
   setError: (msg: string) => void;
 }) {
@@ -180,12 +327,14 @@ function CategoryNode({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(category.name);
   const [editSlug, setEditSlug] = useState(category.slug);
+  const [editImageUrl, setEditImageUrl] = useState(category.imageUrl || '');
   const [autoSlug, setAutoSlug] = useState(false);
 
   // Add child state
   const [addingChild, setAddingChild] = useState(false);
   const [childName, setChildName] = useState('');
   const [childSlug, setChildSlug] = useState('');
+  const [childImageUrl, setChildImageUrl] = useState('');
   const [autoChildSlug, setAutoChildSlug] = useState(true);
 
   // Moving state
@@ -194,6 +343,9 @@ function CategoryNode({
 
   const path = getCategoryPath(category, categories);
   const invalidMoveIds = getDescendantIds(category.id, categories);
+
+  const isBeingDragged = draggedCat?.id === category.id;
+  const isDropTarget = hoverDropId === category.id;
 
   // Matches search
   const isMatch =
@@ -209,6 +361,7 @@ function CategoryNode({
         body: JSON.stringify({
           name: editName.trim(),
           slug: editSlug.trim() ? slugify(editSlug.trim()) : slugify(editName.trim()),
+          imageUrl: editImageUrl.trim() || null,
         }),
       });
       setEditing(false);
@@ -227,10 +380,12 @@ function CategoryNode({
           name: childName.trim(),
           slug: childSlug.trim() ? slugify(childSlug.trim()) : slugify(childName.trim()),
           parentId: category.id,
+          imageUrl: childImageUrl.trim() || null,
         }),
       });
       setChildName('');
       setChildSlug('');
+      setChildImageUrl('');
       setAddingChild(false);
       if (!isExpanded) toggleExpand(category.id);
       onChanged();
@@ -275,12 +430,29 @@ function CategoryNode({
 
       {/* Main Node Card */}
       <div
+        onDragOver={(e) => onDragOverNode(e, category)}
+        onDragLeave={onDragLeaveNode}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDropOnNode(category);
+        }}
         className={`my-2 rounded-xl border p-3.5 transition-all ${tierStyle.card} ${
-          isMatch ? 'ring-1 ring-neutral-900/10' : 'opacity-80'
+          isMatch ? '' : 'opacity-70'
+        } ${isBeingDragged ? 'opacity-40 border-dashed border-neutral-400 bg-neutral-100 scale-[0.99]' : ''} ${
+          isDropTarget
+            ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/80 scale-[1.01] shadow-md'
+            : ''
         }`}
       >
+        {isDropTarget && (
+          <div className="mb-2 p-1.5 rounded-lg bg-blue-100 text-blue-900 text-xs font-bold flex items-center justify-center gap-1.5 animate-pulse">
+            <CornerDownRight size={14} /> Thả vào đây để chuyển "{draggedCat?.name}" làm mục con của "{category.name}"
+          </div>
+        )}
+
         {editing ? (
-          <div className="space-y-3 bg-neutral-50/90 p-3 rounded-lg border border-neutral-200">
+          <div className="space-y-3.5 bg-neutral-50/90 p-3.5 rounded-lg border border-neutral-200">
             <div className="flex items-center justify-between text-xs font-semibold text-neutral-600">
               <span className="flex items-center gap-1.5">
                 <Pencil size={13} /> Chỉnh sửa danh mục ({tierStyle.name})
@@ -291,6 +463,7 @@ function CategoryNode({
                   setEditing(false);
                   setEditName(category.name);
                   setEditSlug(category.slug);
+                  setEditImageUrl(category.imageUrl || '');
                 }}
                 className="text-neutral-400 hover:text-black"
               >
@@ -336,7 +509,17 @@ function CategoryNode({
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between pt-1">
+
+            {/* Image Field for editing */}
+            <div className="border-t border-neutral-200/80 pt-2.5">
+              <CategoryImageField
+                value={editImageUrl}
+                onChange={setEditImageUrl}
+                label="Ảnh đại diện danh mục"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-neutral-200/80">
               <span className="text-[11px] text-neutral-500 font-mono">
                 URL query: <code className="text-neutral-700">?category={editSlug ? slugify(editSlug) : '...'}</code>
               </span>
@@ -360,8 +543,21 @@ function CategoryNode({
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Left: Info & Hierarchy */}
+            {/* Left: Drag handle + Expand + Thumbnail Image + Info */}
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {/* Drag Handle */}
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', category.id);
+                  onDragStartNode(category);
+                }}
+                className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100 rounded transition"
+                title="Giữ và kéo để đổi tầng hoặc sắp xếp danh mục"
+              >
+                <GripVertical size={16} />
+              </div>
+
               {/* Expand / Collapse toggle */}
               {children.length > 0 ? (
                 <button
@@ -378,12 +574,44 @@ function CategoryNode({
                 </div>
               )}
 
-              {/* Folder Icon */}
-              <div className={`p-1 rounded-md bg-neutral-100 ${tierStyle.iconColor}`}>
-                {children.length > 0 ? (
-                  isExpanded ? <FolderOpen size={16} /> : <Folder size={16} />
+              {/* Interactive Category Image / Picker Button */}
+              <div className="relative flex-shrink-0">
+                {category.imageUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(true);
+                      setEditName(category.name);
+                      setEditSlug(category.slug);
+                      setEditImageUrl(category.imageUrl || '');
+                    }}
+                    title="Bấm để đổi ảnh đại diện danh mục"
+                    className="group relative w-11 h-11 rounded-lg border border-neutral-200 overflow-hidden bg-neutral-100 block shadow-xs hover:ring-2 hover:ring-amber-500 transition"
+                  >
+                    <img
+                      src={category.imageUrl}
+                      alt={category.name}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-[9px] font-bold">
+                      Đổi ảnh
+                    </div>
+                  </button>
                 ) : (
-                  <Layers size={15} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(true);
+                      setEditName(category.name);
+                      setEditSlug(category.slug);
+                      setEditImageUrl('');
+                    }}
+                    title="Bấm để tải ảnh đại diện cho danh mục này"
+                    className="w-11 h-11 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-500 flex flex-col items-center justify-center text-amber-700 transition group"
+                  >
+                    <ImageIcon size={14} className="group-hover:scale-110 transition-transform" />
+                    <span className="text-[9px] font-bold mt-0.5 leading-none">+ Ảnh</span>
+                  </button>
                 )}
               </div>
 
@@ -425,6 +653,21 @@ function CategoryNode({
             <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
+                onClick={() => {
+                  setEditing(true);
+                  setEditName(category.name);
+                  setEditSlug(category.slug);
+                  setEditImageUrl(category.imageUrl || '');
+                }}
+                className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-semibold text-neutral-600 hover:text-black hover:border-neutral-400 transition"
+                title="Chọn hoặc đổi ảnh đại diện"
+              >
+                <ImageIcon size={13} className="text-amber-600" />
+                <span className="hidden lg:inline">{category.imageUrl ? 'Đổi ảnh' : 'Chọn ảnh'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setAddingChild(!addingChild)}
                 className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                   addingChild ? 'bg-black text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100'
@@ -441,9 +684,10 @@ function CategoryNode({
                   setEditing(true);
                   setEditName(category.name);
                   setEditSlug(category.slug);
+                  setEditImageUrl(category.imageUrl || '');
                 }}
                 className="rounded-lg border border-neutral-200 bg-white p-1.5 text-neutral-500 hover:text-black hover:border-neutral-400 transition"
-                title="Chỉnh sửa tên và key"
+                title="Chỉnh sửa tên, key và hình ảnh"
               >
                 <Pencil size={14} />
               </button>
@@ -476,8 +720,8 @@ function CategoryNode({
 
         {/* Add Child Form */}
         {addingChild && (
-          <div className="mt-3.5 border-t border-neutral-200/70 pt-3.5 bg-neutral-50/80 p-3 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
+          <div className="mt-3.5 border-t border-neutral-200/70 pt-3.5 bg-neutral-50/80 p-3.5 rounded-lg space-y-3">
+            <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-neutral-700 flex items-center gap-1.5">
                 <CornerDownRight size={13} className="text-blue-600" />
                 Thêm danh mục con (Tầng {depth + 2}) trực thuộc "{category.name}"
@@ -529,7 +773,17 @@ function CategoryNode({
                 />
               </div>
             </div>
-            <div className="mt-2.5 flex items-center justify-between">
+
+            {/* Child Image Input */}
+            <div className="border-t border-neutral-200/80 pt-2.5">
+              <CategoryImageField
+                value={childImageUrl}
+                onChange={setChildImageUrl}
+                label="Hình ảnh cho danh mục con"
+              />
+            </div>
+
+            <div className="pt-1 flex items-center justify-between border-t border-neutral-200/80">
               <span className="text-[11px] text-neutral-500 font-mono">
                 Key đầy đủ: <code className="text-blue-800">{category.slug}/{childSlug ? slugify(childSlug) : '...'}</code>
               </span>
@@ -599,7 +853,7 @@ function CategoryNode({
               </button>
             </div>
             <p className="mt-1.5 text-[11px] text-amber-800">
-              * Hệ thống đã tự động lọc để ngăn việc chuyển danh mục vào chính nó hoặc danh mục con của nó.
+              * Mẹo: Bạn cũng có thể kéo thả biểu tượng 6 chấm (grip) ở đầu thẻ để đổi tầng nhanh!
             </p>
           </div>
         )}
@@ -617,7 +871,13 @@ function CategoryNode({
               isAdmin={isAdmin}
               searchQuery={searchQuery}
               expandedIds={expandedIds}
+              draggedCat={draggedCat}
+              hoverDropId={hoverDropId}
               toggleExpand={toggleExpand}
+              onDragStartNode={onDragStartNode}
+              onDragOverNode={onDragOverNode}
+              onDragLeaveNode={onDragLeaveNode}
+              onDropOnNode={onDropOnNode}
               onChanged={onChanged}
               setError={setError}
             />
@@ -634,16 +894,23 @@ export function CategoryManager() {
   const [categories, setCategories] = useState<CategoryWithMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionNotice, setActionNotice] = useState('');
 
   // New root form
   const [newRootName, setNewRootName] = useState('');
   const [newRootSlug, setNewRootSlug] = useState('');
+  const [newRootImageUrl, setNewRootImageUrl] = useState('');
   const [autoRootSlug, setAutoRootSlug] = useState(true);
-  const [showAddRoot, setShowAddRoot] = useState(false);
+  const [showAddRoot, setShowAddRoot] = useState(true);
 
   // Search & Expand controls
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Drag-and-drop state
+  const [draggedCat, setDraggedCat] = useState<CategoryWithMeta | null>(null);
+  const [hoverDropId, setHoverDropId] = useState<string | null>(null);
+  const [isOverRootZone, setIsOverRootZone] = useState(false);
 
   const load = () => {
     return api<CategoryWithMeta[]>('/categories')
@@ -660,6 +927,11 @@ export function CategoryManager() {
   useEffect(() => {
     void load();
   }, []);
+
+  function showNotice(msg: string) {
+    setActionNotice(msg);
+    setTimeout(() => setActionNotice(''), 3000);
+  }
 
   function toggleExpand(id: string) {
     setExpandedIds((prev) => {
@@ -678,6 +950,75 @@ export function CategoryManager() {
     setExpandedIds(new Set());
   }
 
+  // Drag and Drop Handlers
+  function handleDragStartNode(cat: CategoryWithMeta) {
+    setDraggedCat(cat);
+  }
+
+  function handleDragOverNode(e: React.DragEvent, targetCat: CategoryWithMeta) {
+    if (!draggedCat || draggedCat.id === targetCat.id) return;
+    const invalidIds = getDescendantIds(draggedCat.id, categories);
+    if (invalidIds.has(targetCat.id)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (hoverDropId !== targetCat.id) {
+      setHoverDropId(targetCat.id);
+    }
+  }
+
+  function handleDragLeaveNode() {
+    setHoverDropId(null);
+  }
+
+  async function handleDropOnNode(targetCat: CategoryWithMeta) {
+    if (!draggedCat || draggedCat.id === targetCat.id) return;
+    const invalidIds = getDescendantIds(draggedCat.id, categories);
+    if (invalidIds.has(targetCat.id)) {
+      alert('Không thể chuyển danh mục vào chính nó hoặc danh mục con của nó!');
+      setDraggedCat(null);
+      setHoverDropId(null);
+      return;
+    }
+
+    const dragged = draggedCat;
+    setDraggedCat(null);
+    setHoverDropId(null);
+
+    try {
+      await api(`/categories/${dragged.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ parentId: targetCat.id }),
+      });
+      // Expand target node so the moved item is visible
+      setExpandedIds((prev) => new Set([...prev, targetCat.id]));
+      showNotice(`Đã chuyển "${dragged.name}" vào làm mục con của "${targetCat.name}"`);
+      void load();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi di chuyển danh mục');
+    }
+  }
+
+  async function handleDropToRoot(e: React.DragEvent) {
+    e.preventDefault();
+    if (!draggedCat) return;
+    const dragged = draggedCat;
+    setDraggedCat(null);
+    setIsOverRootZone(false);
+
+    if (!dragged.parentId) return; // Already root
+
+    try {
+      await api(`/categories/${dragged.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ parentId: null }),
+      });
+      showNotice(`Đã chuyển "${dragged.name}" thành Tầng 1 (Cấp gốc)`);
+      void load();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi chuyển lên cấp gốc');
+    }
+  }
+
   async function addRoot(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!newRootName.trim()) return;
@@ -687,11 +1028,14 @@ export function CategoryManager() {
         body: JSON.stringify({
           name: newRootName.trim(),
           slug: newRootSlug.trim() ? slugify(newRootSlug.trim()) : slugify(newRootName.trim()),
+          imageUrl: newRootImageUrl.trim() || null,
         }),
       });
       setNewRootName('');
       setNewRootSlug('');
+      setNewRootImageUrl('');
       setShowAddRoot(false);
+      showNotice(`Đã tạo danh mục gốc mới "${newRootName.trim()}"`);
       void load();
     } catch (e: any) {
       setError(e.message);
@@ -711,6 +1055,35 @@ export function CategoryManager() {
   return (
     <div className="space-y-6">
       <ErrorBanner message={error} />
+
+      {/* Visual Guide Banner */}
+      <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-4 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-950 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-white font-black text-xs shadow-xs">
+            ✨
+          </span>
+          <div>
+            <div className="font-bold text-sm text-neutral-900">
+              Đã kích hoạt: Kéo thả đổi tầng đa cấp & Bộ chọn ảnh đại diện (Image Picker)
+            </div>
+            <p className="text-neutral-600 mt-0.5">
+              • Giữ icon 6 chấm <kbd className="font-mono bg-white px-1.5 py-0.5 rounded border border-neutral-300 text-neutral-800">::</kbd> để kéo thả đổi tầng hoặc chuyển lên Cấp 1 (Gốc).<br/>
+              • Bấm nút <span className="font-semibold text-amber-800 bg-white px-1.5 py-0.5 rounded border border-amber-300">[ + Ảnh ]</span> hoặc <span className="font-semibold text-amber-800 bg-white px-1.5 py-0.5 rounded border border-amber-300">[ Chọn ảnh ]</span> trên từng danh mục để tải ảnh từ máy tính hoặc dán URL.
+            </p>
+          </div>
+        </div>
+        <div className="text-[11px] text-neutral-500 font-mono bg-white/80 px-2.5 py-1.5 rounded-lg border border-neutral-200">
+          * Nếu thấy giao diện cũ, hãy nhấn <kbd className="font-bold text-black bg-neutral-100 px-1 py-0.5 rounded border border-neutral-300">Ctrl + F5</kbd> (xóa cache)
+        </div>
+      </div>
+
+      {/* Floating Action Notice */}
+      {actionNotice && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-black text-white px-4 py-3 text-sm font-semibold shadow-2xl flex items-center gap-2 border border-neutral-700 animate-in fade-in slide-in-from-bottom-2">
+          <Check size={16} className="text-emerald-400" />
+          <span>{actionNotice}</span>
+        </div>
+      )}
 
       {/* Top Overview Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -847,6 +1220,15 @@ export function CategoryManager() {
             </div>
           </div>
 
+          {/* Root Image Input */}
+          <div className="border-t border-amber-200/80 pt-3">
+            <CategoryImageField
+              value={newRootImageUrl}
+              onChange={setNewRootImageUrl}
+              label="Hình ảnh minh họa cho Danh mục Gốc"
+            />
+          </div>
+
           <div className="flex items-center justify-between pt-2 border-t border-amber-200">
             <span className="text-xs text-neutral-500 font-mono">
               Key xem trước: <code className="text-amber-800 font-bold">/cosplay?category={newRootSlug ? slugify(newRootSlug) : '...'}</code>
@@ -877,6 +1259,9 @@ export function CategoryManager() {
             CÂY PHÂN CẤP DANH MỤC ({roots.length} gốc, {subCategoriesCount} nhánh)
           </span>
           <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 text-[11px] text-neutral-400">
+              <GripVertical size={13} /> Kéo thả thẻ để đổi tầng
+            </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Tầng 1 (Gốc)
             </span>
@@ -888,6 +1273,25 @@ export function CategoryManager() {
             </span>
           </div>
         </div>
+
+        {/* Dedicated Drop Zone: Promote dragged child to Root Level */}
+        {draggedCat && draggedCat.parentId && (
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsOverRootZone(true);
+            }}
+            onDragLeave={() => setIsOverRootZone(false)}
+            onDrop={handleDropToRoot}
+            className={`mb-4 p-4 rounded-xl border-2 border-dashed text-center text-xs font-bold transition-all ${
+              isOverRootZone
+                ? 'border-amber-500 bg-amber-100 text-amber-900 scale-[1.01] shadow-md'
+                : 'border-amber-300 bg-amber-50/70 text-amber-800'
+            }`}
+          >
+            🎯 Thả vào đây để đưa "{draggedCat.name}" lên TẦNG 1 (CẤP GỐC)
+          </div>
+        )}
 
         {loading ? (
           <div className="py-12 text-center text-sm text-neutral-500">Đang tải danh mục…</div>
@@ -917,7 +1321,13 @@ export function CategoryManager() {
                 isAdmin={isAdmin}
                 searchQuery={searchQuery}
                 expandedIds={expandedIds}
+                draggedCat={draggedCat}
+                hoverDropId={hoverDropId}
                 toggleExpand={toggleExpand}
+                onDragStartNode={handleDragStartNode}
+                onDragOverNode={handleDragOverNode}
+                onDragLeaveNode={handleDragLeaveNode}
+                onDropOnNode={handleDropOnNode}
                 onChanged={load}
                 setError={setError}
               />
