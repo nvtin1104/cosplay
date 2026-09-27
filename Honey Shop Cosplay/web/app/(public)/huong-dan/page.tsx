@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import { getPosts } from '../../../lib/api';
 
 export const metadata: Metadata = { title: 'Hướng dẫn thuê đồ', description: 'Các hướng dẫn thuê và sử dụng trang phục cosplay tại Honey Shop.', alternates: { canonical: '/huong-dan' } };
@@ -22,8 +22,8 @@ export default async function GuidePage() {
           Một vài lưu ý nhỏ giúp bạn có trải nghiệm thuê đồ cosplay trọn vẹn và thoải mái nhất cùng Honey Shop.
         </p>
 
-        {/* 3 bước thuê vuông vức / sticker */}
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        {/* Các bước thuê dạng accordion để dễ đọc trên cả điện thoại và máy tính. */}
+        <div className="mt-12 grid gap-4">
           {[
             {
               step: '01',
@@ -41,18 +41,14 @@ export default async function GuidePage() {
               desc: 'Không tự ý giặt máy hay chỉnh sửa trang phục, kiểm tra đủ phụ kiện trước khi gửi lại shop.',
             },
           ].map((item, i) => (
-            <article
-              key={item.step}
-              className={`sticker min-h-64 p-7 ${
-                i === 1 ? 'bg-[#ffe75c] text-[#24150e]' : 'bg-white text-[#24150e]'
-              }`}
-            >
-              <span className="display text-6xl font-extrabold text-[#ff9b35]">
-                {item.step}
-              </span>
-              <h2 className="display mt-4 text-3xl font-extrabold">{item.title}</h2>
-              <p className="mt-3 leading-7 text-[#624b40]">{item.desc}</p>
-            </article>
+            <details key={item.step} name="rental-steps" className={`group sticker overflow-hidden ${i === 1 ? 'bg-[#ffe75c]' : 'bg-white'}`} open={i === 0}>
+              <summary className="flex cursor-pointer list-none items-center gap-5 p-5 sm:p-7 [&::-webkit-details-marker]:hidden">
+                <span className="display shrink-0 text-4xl font-extrabold text-[#ff9b35] sm:text-6xl">{item.step}</span>
+                <span className="display flex-1 text-xl font-extrabold text-[#24150e] sm:text-3xl">{item.title}</span>
+                <ArrowDown size={22} className="shrink-0 text-[#624b40] transition-transform group-open:rotate-180" />
+              </summary>
+              <p className="max-w-3xl border-t border-[#24150e]/15 px-5 pb-6 pt-4 leading-7 text-[#624b40] sm:px-7 sm:pb-7 sm:pl-[6.5rem]">{item.desc}</p>
+            </details>
           ))}
         </div>
 
@@ -64,17 +60,16 @@ export default async function GuidePage() {
             </h2>
             <div className="mt-6 space-y-4">
               {guides.map((g) => (
-                <details
-                  key={g.id}
-                  className="sticker bg-white p-6 text-[#24150e]"
-                >
-                  <summary className="flex cursor-pointer items-center justify-between font-extrabold"><span className="flex items-center gap-3">
+                <details key={g.id} name="guide-articles" className="group sticker overflow-hidden bg-white text-[#24150e]">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5 font-extrabold sm:p-6 [&::-webkit-details-marker]:hidden"><span className="flex items-center gap-3">
                     <CheckCircle2 size={18} className="text-[#ff9b35]" />
                     <span>{g.title}</span>
                   </span>
-                  <ArrowRight size={18} /></summary>
-                  <div className="prose-content mt-5 border-t border-dashed pt-5" dangerouslySetInnerHTML={{ __html: g.content }} />
-                  <Link href={`/huong-dan/${g.slug}`} className="mt-5 inline-block font-bold underline">Link hướng dẫn riêng →</Link>
+                  <ArrowDown size={18} className="shrink-0 transition-transform group-open:rotate-180" /></summary>
+                  <div className="border-t border-dashed border-[#24150e]/20 px-5 pb-6 sm:px-6">
+                    <div className="prose-content pt-5" dangerouslySetInnerHTML={{ __html: g.content }} />
+                    <Link href={`/huong-dan/${g.slug}`} className="mt-4 inline-flex items-center gap-2 font-bold text-[#b4570a] underline">Xem hướng dẫn riêng <ArrowRight size={16} /></Link>
+                  </div>
                 </details>
               ))}
             </div>
