@@ -2,20 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X, BookOpen, Settings } from 'lucide-react';
+import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X, BookOpen, Settings, ChevronDown, Layers } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import type { AuthUser } from '../../lib/types';
 
 const links = [
   ['/admin', 'Tổng quan', LayoutDashboard],
   ['/admin/products', 'Kho đồ', Box],
-  ['/admin/categories', 'Danh mục', FolderTree],
+  ['/admin/categories', 'Danh mục sản phẩm', FolderTree],
   ['/admin/tags', 'Tags', Tags],
   ['/admin/rentals', 'Lịch thuê', CalendarDays],
-  ['/admin/posts', 'Bài viết', FileText],
-  ['/admin/guides', 'Hướng dẫn', BookOpen],
   ['/admin/settings', 'Cài đặt site', Settings],
   ['/admin/users', 'Nhân sự', Users],
+] as const;
+
+const contentLinks = [
+  ['/admin/posts', 'Bài viết', FileText],
+  ['/admin/guides', 'Hướng dẫn', BookOpen],
+  ['/admin/post-categories', 'Danh mục nội dung', FolderTree],
 ] as const;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -24,6 +28,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [isPending, startTransition] = useTransition();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [open, setOpen] = useState(false);
+  const [contentOpen, setContentOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -69,7 +74,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-neutral-200 bg-white p-5 transition-transform md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-neutral-200 bg-white p-5 transition-transform md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -81,7 +86,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <X />
           </button>
         </div>
-        <nav className="mt-10 space-y-1">
+        <nav className="admin-sidebar-scroll mt-7 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4 pr-1">
           {links.map(([href, label, Icon]) => (
             <Link
               key={href}
@@ -105,8 +110,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               {label}
             </Link>
           ))}
+          <div className="pt-4">
+            <button type="button" aria-expanded={contentOpen} aria-controls="admin-content-submenu" onClick={() => setContentOpen(value => !value)}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ${contentOpen ? 'text-neutral-900' : 'text-neutral-600 hover:bg-neutral-100 hover:text-black'}`}>
+              <span className="flex items-center gap-3"><Layers size={17} /><span className="text-[10px] uppercase tracking-[.2em]">Nội dung</span></span>
+              <ChevronDown size={16} className={`transition-transform duration-200 ${contentOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <div id="admin-content-submenu" aria-hidden={!contentOpen} className={`ml-3 grid overflow-hidden border-l border-neutral-200 pl-3 transition-[grid-template-rows,opacity,margin] duration-200 ${contentOpen ? 'mt-1 grid-rows-[1fr] opacity-100' : 'mt-0 grid-rows-[0fr] opacity-0'}`}>
+              <div className="min-h-0 overflow-hidden">
+                <div className="space-y-1 py-0.5">
+              {contentLinks.map(([href, label, Icon]) => (
+                <Link key={href} href={href} prefetch={true} onClick={() => { setOpen(false); if (path !== href) startTransition(() => router.push(href)); }}
+                  tabIndex={contentOpen ? 0 : -1}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-150 ${path === href || path.startsWith(`${href}/`) ? 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-100' : 'text-neutral-600 hover:bg-neutral-100 hover:text-black active:scale-[0.98]'}`}>
+                  <Icon size={17} />{label}
+                </Link>
+              ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </nav>
-        <div className="absolute bottom-5 left-5 right-5 border-t border-neutral-200 pt-4">
+        <div className="mt-auto shrink-0 border-t border-neutral-200 pt-4">
           <p suppressHydrationWarning className="truncate text-sm font-semibold">{user?.name || 'Đang tải…'}</p>
           <p suppressHydrationWarning className="truncate text-xs text-neutral-500">{user?.email || 'admin@honeyshop.local'}</p>
           <button
