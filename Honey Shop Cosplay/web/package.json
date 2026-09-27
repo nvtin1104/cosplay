@@ -6,8 +6,8 @@
     "dev:cloudflare": "vinext dev",
     "build": "next build",
     "build:cloudflare": "vinext build",
-    "preview": "vinext preview",
-    "deploy": "vinext deploy",
+    "preview": "vinext start",
+    "deploy": "vinext-cloudflare deploy",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

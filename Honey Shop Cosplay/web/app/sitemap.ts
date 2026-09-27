@@ -1,27 +1,22 @@
 import type { MetadataRoute } from 'next';
-
-export const dynamic = 'force-static';
+import { getPosts, getProducts } from '../lib/api';
 
 const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://honey-shop-web.nvtin1104.workers.dev';
-
-export default function sitemap(): MetadataRoute.Sitemap {
-  const routes = [
-    '',
-    '/cosplay',
-    '/cosplay/anya-forger-dress',
-    '/cosplay/gojo-satoru-infinity-set',
-    '/cosplay/custom-witch-set',
-    '/blog',
-    '/blog/cach-chon-size-do-cosplay',
-    '/blog/honey-shop-tai-le-hoi-mua-he',
-    '/huong-dan',
-  ];
-
-  return routes.map((path) => ({
-    url: `${baseUrl}${path}`,
-    lastModified: new Date(),
-    changeFrequency: path === '' ? 'daily' : 'weekly',
-    priority: path === '' ? 1 : path.startsWith('/cosplay') ? 0.8 : 0.6,
-  }));
+async function allPages<T>(loader: (offset: number) => Promise<T[]>): Promise<T[]> {
+  const all: T[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await loader(offset);
+    all.push(...page);
+    if (page.length < 500) break;
+  }
+  return all;
 }
-
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [products, articles, guides] = await Promise.all([
+    allPages(offset => getProducts({ limit: 500, offset })),
+    allPages(offset => getPosts({ type: 'ARTICLE', limit: 500, offset })),
+    allPages(offset => getPosts({ type: 'GUIDE', limit: 500, offset })),
+  ]);
+  const routes = ['', '/cosplay', '/blog', '/huong-dan', ...products.map(p => `/cosplay/${p.slug}`), ...articles.map(p => `/blog/${p.slug}`), ...guides.map(p => `/huong-dan/${p.slug}`)];
+  return routes.map(path => ({ url: `${baseUrl}${path}`, lastModified: new Date(), changeFrequency: 'weekly', priority: path === '' ? 1 : .7 }));
+}

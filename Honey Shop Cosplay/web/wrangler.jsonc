@@ -2,8 +2,11 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "honey-shop-web",
   "compatibility_date": "2026-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "vinext/server/fetch-handler",
   "assets": {
-    "directory": "./out",
-    "html_handling": "auto-trailing-slash"
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
   }
 }

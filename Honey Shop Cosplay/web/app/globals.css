@@ -153,3 +153,12 @@ button {
     transform: none;
   }
 }
+.prose-content { color: #24150e; font-size: 1rem; line-height: 1.85; overflow-wrap: anywhere; }
+.prose-content p, .prose-content ul, .prose-content ol, .prose-content blockquote { margin: 0 0 1rem; }
+.prose-content h2 { font-size: 1.75rem; font-weight: 800; margin: 1.5rem 0 .75rem; }
+.prose-content h3 { font-size: 1.35rem; font-weight: 800; margin: 1.25rem 0 .5rem; }
+.prose-content ul { list-style: disc; padding-left: 1.5rem; }
+.prose-content ol { list-style: decimal; padding-left: 1.5rem; }
+.prose-content a { text-decoration: underline; color: #b4570a; }
+.prose-content img { max-width: 100%; height: auto; margin: 1rem 0; }
+.prose-content blockquote { border-left: 4px solid #ff9b35; padding-left: 1rem; }
