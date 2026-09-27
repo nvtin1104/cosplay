@@ -62,7 +62,7 @@ export function DashboardData({ initialData }: { initialData?: { products: Produ
   useEffect(() => {
     if (initialData) return;
     let active = true;
-    Promise.all([api<Product[]>('/products'), api<any[]>('/rentals'), api<Post[]>('/posts')])
+    Promise.all([api<Product[]>('/products'), api<any[]>('/rentals'), api<Post[]>('/admin/posts')])
       .then(([products, rentals, posts]) => {
         if (active) setData({ products, rentals, posts });
       })
@@ -600,7 +600,7 @@ export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {
         <option value="ARTICLE">Bài viết</option>
         <option value="GUIDE">Hướng dẫn</option>
       </select>
-      <textarea className="admin-input" name="excerpt" placeholder="Tóm tắt" defaultValue={post?.excerpt} />
+      <textarea className="admin-input" name="excerpt" placeholder="Tóm tắt" defaultValue={post?.excerpt ?? undefined} />
       <textarea className="admin-input min-h-40" name="content" placeholder="Nội dung" defaultValue={post?.content} required />
       <div className="flex gap-3">
         <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white">

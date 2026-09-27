@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X } from 'lucide-react';
+import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X, BookOpen, Settings } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import type { AuthUser } from '../../lib/types';
 
@@ -12,7 +12,9 @@ const links = [
   ['/admin/categories', 'Danh mục', FolderTree],
   ['/admin/tags', 'Tags', Tags],
   ['/admin/rentals', 'Lịch thuê', CalendarDays],
-  ['/admin/posts', 'Nội dung', FileText],
+  ['/admin/posts', 'Bài viết', FileText],
+  ['/admin/guides', 'Hướng dẫn', BookOpen],
+  ['/admin/settings', 'Cài đặt site', Settings],
   ['/admin/users', 'Nhân sự', Users],
 ] as const;
 
