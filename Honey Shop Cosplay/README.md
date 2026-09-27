@@ -10,12 +10,12 @@ Monorepo MVP cho shop cho thuê đồ cosplay:
 ## Chạy local
 
 ```bash
-npm install
-npm run dev:all
-# Hoặc: npm start
+pnpm install
+pnpm dev:all
+# Hoặc: pnpm start
 ```
 
-*(Lệnh `dev:all` sẽ tự động chạy migrate DB, seed dữ liệu mẫu và bật đồng thời cả API lẫn Web)*
+*(Lệnh `dev:all` chạy migration và bật API cùng Web; không ghi đè dữ liệu đã nhập. Chỉ chạy `pnpm db:seed:local` khi chủ động muốn nạp lại dữ liệu demo.)*
 
 
 Web public: `http://localhost:3000`  
@@ -25,16 +25,10 @@ API health: `http://localhost:8787/api/v1/health`
 ## Deploy Cloudflare
 
 ```bash
-npx wrangler login
-npx wrangler d1 create honey-shop-db
+pnpm --filter honey-shop-api exec wrangler login
+pnpm --filter honey-shop-api db:migrate:remote
+pnpm deploy:api
+pnpm deploy:web
 ```
 
-Thay `database_id` trong `api/wrangler.toml` bằng ID Cloudflare trả về, sau đó:
-
-```bash
-npm run db:migrate:remote
-npm run db:seed:remote --workspace api
-npm run deploy:api
-```
-
-API production chạy trên `*.workers.dev` hoặc custom domain. Local D1 được Wrangler lưu riêng, không ảnh hưởng database production. PostgreSQL/Docker và Prisma không còn là runtime của API Worker.
+Cấu hình tài khoản Cloudflare và `NEXT_PUBLIC_SITE_URL` theo domain web thực tế; cập nhật `API_ORIGIN`, `CORS_ORIGIN` và `APP_URL` nếu không dùng các URL workers.dev mặc định. Web được deploy bằng Vinext Worker để render nội dung D1 theo yêu cầu. Seed demo không chạy khi khởi động hoặc deploy. Local D1 được Wrangler lưu riêng, không ảnh hưởng database production.

@@ -4,13 +4,14 @@
   "workspaces": ["web", "api"],
   "scripts": {
     "dev": "concurrently -n \"API,WEB\" -c \"cyan,magenta\" \"pnpm --filter honey-shop-api dev\" \"pnpm --filter honey-shop-web dev\"",
-    "dev:all": "pnpm db:migrate:local && pnpm db:seed:local && pnpm dev",
+    "dev:all": "pnpm db:migrate:local && pnpm dev",
     "start": "pnpm dev",
     "build": "pnpm --filter honey-shop-api build && pnpm --filter honey-shop-web build",
     "lint": "pnpm --filter honey-shop-api lint && pnpm --filter honey-shop-web lint",
     "db:migrate:local": "pnpm --filter honey-shop-api db:migrate:local",
     "db:seed:local": "pnpm --filter honey-shop-api db:seed:local",
-    "deploy:api": "pnpm --filter honey-shop-api deploy"
+    "deploy:api": "pnpm --filter honey-shop-api deploy",
+    "deploy:web": "pnpm --filter honey-shop-web deploy"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
