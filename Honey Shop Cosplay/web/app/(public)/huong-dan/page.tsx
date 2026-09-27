@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import { getPosts } from '../../../lib/api';
 
+export const metadata: Metadata = { title: 'Hướng dẫn thuê đồ', description: 'Các hướng dẫn thuê và sử dụng trang phục cosplay tại Honey Shop.', alternates: { canonical: '/huong-dan' } };
+
 export default async function GuidePage() {
-  const guides = (await getPosts()).filter((p) => p.type === 'GUIDE');
+  const guides = await getPosts({ type: 'GUIDE', limit: 500 });
 
   return (
     <main className="min-h-screen bg-[#fff6dc] py-16">
@@ -59,19 +62,20 @@ export default async function GuidePage() {
             <h2 className="display text-4xl font-extrabold text-[#24150e]">
               Bài viết hướng dẫn chi tiết
             </h2>
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 space-y-4">
               {guides.map((g) => (
-                <Link
+                <details
                   key={g.id}
-                  href={`/blog/${g.slug}`}
-                  className="sticker flex items-center justify-between bg-white p-6 font-extrabold text-[#24150e] transition-all hover:bg-[#ffe75c]"
+                  className="sticker bg-white p-6 text-[#24150e]"
                 >
-                  <span className="flex items-center gap-3">
+                  <summary className="flex cursor-pointer items-center justify-between font-extrabold"><span className="flex items-center gap-3">
                     <CheckCircle2 size={18} className="text-[#ff9b35]" />
                     <span>{g.title}</span>
                   </span>
-                  <ArrowRight size={18} />
-                </Link>
+                  <ArrowRight size={18} /></summary>
+                  <div className="prose-content mt-5 border-t border-dashed pt-5" dangerouslySetInnerHTML={{ __html: g.content }} />
+                  <Link href={`/huong-dan/${g.slug}`} className="mt-5 inline-block font-bold underline">Link hướng dẫn riêng →</Link>
+                </details>
               ))}
             </div>
           </div>

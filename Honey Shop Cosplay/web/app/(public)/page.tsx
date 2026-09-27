@@ -3,10 +3,16 @@ import Link from 'next/link';
 import { ArrowUpRight, Heart, Sparkles } from 'lucide-react';
 import { ProductCard } from '../../components/ProductCard';
 import { Reveal } from '../../components/Reveal';
-import { getPosts, getProducts } from '../../lib/api';
+import { getPosts, getProducts, getSettings, getTags } from '../../lib/api';
 
 export default async function HomePage() {
-  const [products, posts] = await Promise.all([getProducts(), getPosts()]);
+  const [products, posts, settings, tags] = await Promise.all([getProducts({ limit: 3 }), getPosts({ type: 'ARTICLE', limit: 2 }), getSettings(), getTags()]);
+  let pinnedIds: string[] = [];
+  try { const parsed = JSON.parse(settings.pinned_tag_ids || '[]'); if (Array.isArray(parsed)) pinnedIds = parsed.filter(id => typeof id === 'string'); } catch {}
+  const pinnedGroups = await Promise.all(pinnedIds.map(async id => {
+    const tag = tags.find(item => item.id === id);
+    return tag ? { tag, products: await getProducts({ tag: tag.slug, limit: 3 }) } : null;
+  }));
 
   return (
     <main className="overflow-hidden">
@@ -127,6 +133,10 @@ export default async function HomePage() {
               </p>
             </div>
           )}
+          {pinnedGroups.filter(group => group && group.products.length).map(group => group && <div key={group.tag.id} className="mt-16">
+            <div className="flex items-end justify-between gap-4"><h3 className="display text-4xl font-extrabold text-[#24150e]">{group.tag.name}</h3><Link href={`/cosplay?tag=${encodeURIComponent(group.tag.slug)}`} className="font-bold underline">Xem tất cả →</Link></div>
+            <div className="mt-7 grid gap-8 md:grid-cols-3">{group.products.map((product, i) => <ProductCard key={product.id} product={product} index={i} />)}</div>
+          </div>)}
         </div>
       </section>
 
@@ -240,7 +250,7 @@ export default async function HomePage() {
                 }`}
               >
                 <span className="text-xs font-extrabold uppercase tracking-widest">
-                  {post.type === 'GUIDE' ? 'Hướng dẫn' : 'Chuyện Honey'}
+                  Chuyện Honey
                 </span>
                 <h3 className="display mt-6 text-4xl font-extrabold leading-tight">
                   {post.title}
@@ -283,7 +293,7 @@ export default async function HomePage() {
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'Store',
-            name: 'Honey Shop Cosplay',
+            name: settings.site_name || 'Honey Shop Cosplay',
             description: 'Dịch vụ cho thuê đồ cosplay tại TP.HCM',
           }),
         }}

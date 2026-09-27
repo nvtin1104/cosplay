@@ -1,61 +1,32 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import type { Route } from 'next';
 import { Sparkles } from 'lucide-react';
 import { ProductCard } from '../../../components/ProductCard';
-import { getProducts } from '../../../lib/api';
+import { getCategories, getProducts, getTags } from '../../../lib/api';
 
-export const metadata: Metadata = {
-  title: 'Kho đồ cosplay',
-  description: 'Xem các set cosplay, giá test/fes/shoot và tình trạng đang có tại Honey Shop.',
-};
-
-export default async function CatalogPage() {
-  const products = await getProducts();
-
-  return (
-    <main className="min-h-screen bg-[#fff6dc] py-14">
-      <div className="shell">
-        <p className="mb-4 inline-flex rotate-[-2deg] items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-4 py-1.5 text-xs font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e]">
-          <Sparkles size={14} /> cosplay closet · sài gòn
-        </p>
-
-        <h1 className="display max-w-4xl text-5xl font-extrabold leading-[.9] text-[#24150e] md:text-8xl">
-          Chọn một nhân vật. Viết một câu chuyện.
-        </h1>
-        <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#624b40] md:text-lg">
-          Toàn bộ set đồ tại Honey đều có ảnh chụp thật 100%, được bảo quản thơm tho và kiểm tra phụ kiện kỹ càng trước ngày bạn nhận đồ.
-        </p>
-
-        {/* Filter categories theo style sticker vuông vức */}
-        <div className="mt-8 flex flex-wrap gap-3">
-          {['Tất cả', 'Anime', 'Game', 'Fantasy', 'Có sẵn hôm nay'].map((x, i) => (
-            <button
-              key={x}
-              type="button"
-              className={`border-2 border-[#24150e] px-5 py-2 text-sm font-extrabold shadow-[3px_4px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5 ${
-                i === 0
-                  ? 'bg-[#ffe75c] text-[#24150e]'
-                  : 'bg-white text-[#24150e] hover:bg-[#ffe75c]/60'
-              }`}
-            >
-              {x}
-            </button>
-          ))}
-        </div>
-
-        {/* Product Grid */}
-        {products.length ? (
-          <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {products.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-12 border-2 border-dashed border-[#24150e] bg-white p-12 text-center shadow-[4px_5px_0_#24150e]">
-            <h2 className="display text-3xl font-extrabold text-[#24150e]">Kho đồ đang nghỉ một chút</h2>
-            <p className="mt-2 text-sm text-[#624b40]">Hãy quay lại sau hoặc liên hệ fanpage để được tư vấn các set đồ mới nhất nhé!</p>
-          </div>
-        )}
-      </div>
-    </main>
-  );
+export const metadata: Metadata = { title: 'Kho đồ cosplay', description: 'Xem các set cosplay và lọc theo danh mục, tag tại Honey Shop.' };
+const pageSize = 24;
+function href(category?: string, tag?: string, offset = 0) {
+  const query = new URLSearchParams();
+  if (category) query.set('category', category);
+  if (tag) query.set('tag', tag);
+  if (offset) query.set('offset', String(offset));
+  return `/cosplay${query.size ? `?${query}` : ''}` as Route;
+}
+export default async function CatalogPage({ searchParams }: { searchParams: Promise<{ category?: string; tag?: string; offset?: string }> }) {
+  const params = await searchParams;
+  const category = params.category || '';
+  const tag = params.tag || '';
+  const offset = Math.max(0, Number(params.offset) || 0);
+  const [products, categories, tags] = await Promise.all([getProducts({ category, tag, limit: pageSize, offset }), getCategories(), getTags()]);
+  return <main className="min-h-screen bg-[#fff6dc] py-14"><div className="shell">
+    <p className="mb-4 inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-4 py-1.5 text-xs font-extrabold shadow-[4px_5px_0_#24150e]"><Sparkles size={14} /> cosplay closet · sài gòn</p>
+    <h1 className="display max-w-4xl text-5xl font-extrabold leading-[.9] text-[#24150e] md:text-8xl">Chọn một nhân vật. Viết một câu chuyện.</h1>
+    <p className="mt-5 max-w-2xl text-base font-semibold leading-7 text-[#624b40] md:text-lg">Chọn danh mục và tag để tìm set đồ phù hợp.</p>
+    <div className="mt-8 space-y-4"><div><h2 className="mb-2 text-sm font-extrabold">Danh mục</h2><div className="flex flex-wrap gap-2"><Link className={`border-2 border-[#24150e] px-4 py-2 text-sm font-bold ${!category ? 'bg-[#ffe75c]' : 'bg-white'}`} href={href('', tag)}>Tất cả</Link>{categories.map(cat => <Link key={cat.id} className={`border-2 border-[#24150e] px-4 py-2 text-sm font-bold ${category === cat.slug ? 'bg-[#ffe75c]' : 'bg-white'}`} href={href(cat.slug, tag)}>{cat.name}</Link>)}</div></div>
+    <div><h2 className="mb-2 text-sm font-extrabold">Tag</h2><div className="flex flex-wrap gap-2"><Link className={`border-2 border-[#24150e] px-4 py-2 text-sm font-bold ${!tag ? 'bg-[#ffe75c]' : 'bg-white'}`} href={href(category, '')}>Tất cả</Link>{tags.map(item => <Link key={item.id} className={`border-2 border-[#24150e] px-4 py-2 text-sm font-bold ${tag === item.slug ? 'bg-[#ffe75c]' : 'bg-white'}`} href={href(category, item.slug)}>{item.name}</Link>)}</div></div></div>
+    {products.length ? <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">{products.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}</div> : <div className="mt-12 border-2 border-dashed border-[#24150e] bg-white p-12 text-center">Chưa có sản phẩm phù hợp với bộ lọc.</div>}
+    <nav className="mt-10 flex justify-center gap-4 text-sm font-bold">{offset > 0 && <Link href={href(category, tag, Math.max(0, offset - pageSize))} className="border-2 border-[#24150e] bg-white px-4 py-2">← Trang trước</Link>}{products.length === pageSize && <Link href={href(category, tag, offset + pageSize)} className="border-2 border-[#24150e] bg-[#ffe75c] px-4 py-2">Trang sau →</Link>}</nav>
+  </div></main>;
 }

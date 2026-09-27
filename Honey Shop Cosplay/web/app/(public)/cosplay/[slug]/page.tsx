@@ -3,14 +3,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
-import { getProduct, getProducts } from '../../../../lib/api';
+import { getProduct } from '../../../../lib/api';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + 'đ';
-
-export async function generateStaticParams() {
-  const products = await getProducts();
-  return products.map((p) => ({ slug: p.slug }));
-}
 
 export async function generateMetadata({
   params,

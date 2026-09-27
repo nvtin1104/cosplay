@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowUpRight, Menu, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
-export function PublicHeader() {
+export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: string; logoUrl?: string }) {
   const [open, setOpen] = useState(false);
 
   // Prevent background scroll when mobile menu is open
@@ -25,10 +25,8 @@ export function PublicHeader() {
         {/* Logo sticker vuông vức theo style badge */}
         <Link href="/" className="flex items-center shrink-0">
           <div className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-3.5 sm:px-4 py-1.5 sm:py-2 text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]">
-            <Sparkles size={18} className="text-[#24150e]" />
-            <span className="display text-xl sm:text-2xl font-extrabold tracking-tight leading-none">
-              honey shop
-            </span>
+            {logoUrl ? <img src={logoUrl} alt={siteName} className="h-8 w-auto max-w-32 object-contain" /> : <Sparkles size={18} className="text-[#24150e]" />}
+            <span className="display text-xl sm:text-2xl font-extrabold tracking-tight leading-none">{siteName}</span>
             <span className="hidden lg:inline-block border-l-2 border-[#24150e]/30 pl-2 text-xs font-extrabold uppercase tracking-wider text-[#24150e]/80">
               sài gòn
             </span>
