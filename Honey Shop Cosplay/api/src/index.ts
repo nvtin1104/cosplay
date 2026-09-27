@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { drizzle } from 'drizzle-orm/d1';
-import { desc, eq, sql } from 'drizzle-orm';
-import { products, productImages, productVariants, posts, rentals, rentalItems } from './db/schema';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import sanitizeHtml from 'sanitize-html';
+import { products, productImages, productVariants, posts, rentals, rentalItems, postCategories } from './db/schema';
 import { AppEnv, AppVariables, hashPassword, randomToken, requireAdmin, requireAuth, SESSION_COOKIE, sha256, validOrigin, verifyPassword } from './auth';
 
 const app = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>();
@@ -12,7 +13,7 @@ const plusHours = (hours: number) => new Date(Date.now() + hours * 3600000).toIS
 const safeUser = (user: any) => ({ id: user.id, email: user.email, name: user.name, role: user.role, active: !!user.active });
 
 app.onError((err, c) => { console.error('API Error:', err); return c.json({ message: err.message || 'Lỗi máy chủ nội bộ' }, 500); });
-app.use('*', async (c, next) => cors({ origin: c.env.CORS_ORIGIN || c.env.APP_URL || '*', credentials: true, allowHeaders: ['Content-Type'], allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] })(c, next));
+app.use('*', async (c, next) => cors({ origin: c.env.CORS_ORIGIN || c.env.APP_URL || '*', credentials: true, allowHeaders: ['Content-Type'], allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'] })(c, next));
 app.use('*', async (c, next) => { if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !validOrigin(c)) return c.json({ message: 'Invalid request origin' }, 403); await next(); });
 app.get('/health', c => c.json({ ok: true, service: 'honey-shop-api-worker', runtime: 'cloudflare-workers', timestamp: now() }));
 
@@ -67,18 +68,120 @@ async function loadTaxonomy(DB: D1Database, productId: string) {
   return { categories: cats.results, tags: tagRows.results, comboItems: combo.results };
 }
 
-app.get('/products', async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(products).where(sql`${products.status} != 'ARCHIVED'`).orderBy(desc(products.createdAt)).limit(limit).offset(offset)); });
+app.get('/products', async c => {
+  const { limit, offset } = parsePage(c);
+  const category = c.req.query('category')?.trim();
+  const tag = c.req.query('tag')?.trim();
+  const conditions = [sql`${products.status} != 'ARCHIVED'`];
+  if (category) conditions.push(sql`${products.id} IN (WITH RECURSIVE descendants(id) AS (SELECT id FROM categories WHERE slug=${category} UNION SELECT c.id FROM categories c JOIN descendants d ON c.parent_id=d.id) SELECT pc.product_id FROM product_categories pc JOIN descendants d ON d.id=pc.category_id)`);
+  if (tag) conditions.push(sql`EXISTS (SELECT 1 FROM product_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.product_id=${products.id} AND t.slug=${tag})`);
+  const items = await drizzle(c.env.DB).select().from(products).where(and(...conditions)).orderBy(desc(products.createdAt)).limit(limit).offset(offset);
+  if (!items.length) return c.json([]);
+  const ids = items.map(p => p.id);
+  const marks = ids.map(() => '?').join(',');
+  const [cats, tags] = await Promise.all([
+    c.env.DB.prepare(`SELECT pc.product_id productId,c.id,c.name,c.slug,c.parent_id parentId FROM product_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.product_id IN (${marks})`).bind(...ids).all<any>(),
+    c.env.DB.prepare(`SELECT pt.product_id productId,t.id,t.name,t.slug FROM product_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.product_id IN (${marks})`).bind(...ids).all<any>(),
+  ]);
+  return c.json(items.map(p => ({ ...p, categories: cats.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest), tags: tags.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest) })));
+});
 app.get('/products/id/:id', requireAuth, async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.id, c.req.param('id')!)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
-app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.slug, c.req.param('slug'))).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
+app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(and(eq(products.slug, c.req.param('slug')), sql`${products.status} != 'ARCHIVED'`)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
 app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
 app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const { categoryIds, tagIds, comboItems, ...patch } = body; await db.update(products).set({ ...patch, updatedAt: now() }).where(eq(products.id, id)); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }); });
 app.delete('/products/:id', requireAuth, requireAdmin, async c => { await drizzle(c.env.DB).update(products).set({ status: 'ARCHIVED', updatedAt: now() }).where(eq(products.id, c.req.param('id')!)); return c.json({ ok: true }); });
 
-app.get('/posts', async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(posts).orderBy(desc(posts.createdAt)).limit(limit).offset(offset)); });
-app.get('/posts/:slug', async c => { const item = await drizzle(c.env.DB).select().from(posts).where(eq(posts.slug, c.req.param('slug'))).get(); return item ? c.json(item) : c.json({ message: 'Post not found' }, 404); });
-app.post('/posts', requireAuth, async c => { const body = await c.req.json<any>(); const isAdmin = c.get('user').role === 'ADMIN'; const stamp = now(); const id = body.id || crypto.randomUUID(); const status = body.status === 'PUBLISHED' && !isAdmin ? 'DRAFT' : body.status || 'DRAFT'; await drizzle(c.env.DB).insert(posts).values({ ...body, id, status, publishedAt: status === 'PUBLISHED' ? body.publishedAt || stamp : null, createdAt: stamp, updatedAt: stamp }); return c.json({ id }, 201); });
-app.patch('/posts/:id', requireAuth, async c => { const body = await c.req.json<any>(); const isAdmin = c.get('user').role === 'ADMIN'; if (body.status === 'PUBLISHED' && !isAdmin) return c.json({ message: 'Chỉ ADMIN mới được đăng bài công khai' }, 403); const patch = { ...body, updatedAt: now() }; if (body.status === 'PUBLISHED' && !patch.publishedAt) patch.publishedAt = now(); await drizzle(c.env.DB).update(posts).set(patch).where(eq(posts.id, c.req.param('id')!)); return c.json({ ok: true }); });
+const cleanContent = (value: unknown) => sanitizeHtml(String(value || ''), {
+  allowedTags: ['p', 'br', 'h2', 'h3', 'h4', 'blockquote', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'img'],
+  allowedAttributes: { a: ['href', 'title', 'target', 'rel'], img: ['src', 'alt'] },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  allowedSchemesByTag: { img: ['http', 'https'] },
+  transformTags: { a: (_tag, attrs) => ({ tagName: 'a', attribs: { ...attrs, rel: 'noopener noreferrer', target: '_blank' } }) },
+});
+const postFields = {
+  id: posts.id, slug: posts.slug, title: posts.title, excerpt: posts.excerpt, content: posts.content,
+  coverUrl: posts.coverUrl, type: posts.type, status: posts.status, seoTitle: posts.seoTitle,
+  seoDescription: posts.seoDescription, categoryId: posts.categoryId, sortIndex: posts.sortIndex,
+  publishedAt: posts.publishedAt, createdAt: posts.createdAt, updatedAt: posts.updatedAt,
+  categoryName: postCategories.name, categorySlug: postCategories.slug,
+};
+const cleanPost = <T extends { content: string }>(item: T) => ({ ...item, content: cleanContent(item.content) });
+const postOrder = [sql`CASE WHEN ${posts.type}='GUIDE' THEN ${posts.sortIndex} END ASC`, desc(posts.createdAt)];
+app.get('/posts', async c => {
+  const { limit, offset } = parsePage(c);
+  const type = c.req.query('type');
+  const category = c.req.query('category');
+  if (type && !['ARTICLE', 'GUIDE'].includes(type)) return c.json({ message: 'Loại bài không hợp lệ' }, 400);
+  const rows = await drizzle(c.env.DB).select(postFields).from(posts).leftJoin(postCategories, eq(posts.categoryId, postCategories.id))
+    .where(and(eq(posts.status, 'PUBLISHED'), type ? eq(posts.type, type) : undefined, category ? eq(postCategories.slug, category) : undefined))
+    .orderBy(...postOrder).limit(limit).offset(offset);
+  return c.json(rows.map(cleanPost));
+});
+app.get('/admin/posts', requireAuth, async c => {
+  const { offset } = parsePage(c);
+  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 5000);
+  const type = c.req.query('type');
+  if (type && !['ARTICLE', 'GUIDE'].includes(type)) return c.json({ message: 'Loại bài không hợp lệ' }, 400);
+  const rows = await drizzle(c.env.DB).select(postFields).from(posts).leftJoin(postCategories, eq(posts.categoryId, postCategories.id))
+    .where(type ? eq(posts.type, type) : undefined).orderBy(...postOrder).limit(limit).offset(offset);
+  return c.json(rows.map(cleanPost));
+});
+app.get('/posts/:slug', async c => {
+  const item = await drizzle(c.env.DB).select(postFields).from(posts).leftJoin(postCategories, eq(posts.categoryId, postCategories.id))
+    .where(and(eq(posts.slug, c.req.param('slug')), eq(posts.status, 'PUBLISHED'))).get();
+  return item ? c.json(cleanPost(item)) : c.json({ message: 'Post not found' }, 404);
+});
+app.post('/posts', requireAuth, async c => {
+  const body = await c.req.json<any>();
+  const title = String(body.title || '').trim();
+  const slug = slugify(String(body.slug || title));
+  const type = body.type || 'ARTICLE';
+  if (!title || !String(body.content || '').trim() || !['ARTICLE', 'GUIDE'].includes(type)) return c.json({ message: 'Thiếu tiêu đề, nội dung hoặc loại bài' }, 400);
+  if (await c.env.DB.prepare('SELECT id FROM posts WHERE slug=?').bind(slug).first()) return c.json({ message: 'Slug đã tồn tại' }, 409);
+  const status = body.status === 'PUBLISHED' && c.get('user').role === 'ADMIN' ? 'PUBLISHED' : 'DRAFT';
+  const stamp = now();
+  const id = crypto.randomUUID();
+  const nextIndex = type === 'GUIDE' ? Number((await c.env.DB.prepare("SELECT coalesce(max(sort_index),0)+1 value FROM posts WHERE type='GUIDE'").first<{ value: number }>())?.value || 1) : 0;
+  await drizzle(c.env.DB).insert(posts).values({ id, slug, title, excerpt: body.excerpt || null, content: cleanContent(body.content), coverUrl: body.coverUrl || null, type, status, categoryId: body.categoryId || null, sortIndex: nextIndex, seoTitle: body.seoTitle || null, seoDescription: body.seoDescription || null, publishedAt: status === 'PUBLISHED' ? stamp : null, createdAt: stamp, updatedAt: stamp });
+  return c.json({ id }, 201);
+});
+app.patch('/posts/:id', requireAuth, async c => {
+  const id = c.req.param('id')!;
+  const body = await c.req.json<any>();
+  const current = await drizzle(c.env.DB).select().from(posts).where(eq(posts.id, id)).get();
+  if (!current) return c.json({ message: 'Không tìm thấy bài viết' }, 404);
+  if (body.status === 'PUBLISHED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được đăng bài công khai' }, 403);
+  const slug = body.slug === undefined ? current.slug : slugify(String(body.slug));
+  if (body.slug !== undefined && !String(body.slug).trim()) return c.json({ message: 'Slug không được để trống' }, 400);
+  if (slug !== current.slug && await c.env.DB.prepare('SELECT id FROM posts WHERE slug=?').bind(slug).first()) return c.json({ message: 'Slug đã tồn tại' }, 409);
+  const patch: Partial<typeof current> = { updatedAt: now(), slug };
+  if ('title' in body && !String(body.title || '').trim()) return c.json({ message: 'Tiêu đề không được để trống' }, 400);
+  for (const field of ['title', 'excerpt', 'coverUrl', 'seoTitle', 'seoDescription', 'categoryId'] as const) if (field in body) (patch as any)[field] = body[field] || null;
+  if ('content' in body) patch.content = cleanContent(body.content);
+  if ('status' in body && ['DRAFT', 'PUBLISHED'].includes(body.status)) { patch.status = body.status; patch.publishedAt = body.status === 'PUBLISHED' ? current.publishedAt || now() : null; }
+  await drizzle(c.env.DB).update(posts).set(patch).where(eq(posts.id, id));
+  return c.json({ ok: true });
+});
+app.post('/admin/guides/reorder', requireAuth, async c => {
+  const { ids } = await c.req.json<{ ids: string[] }>();
+  if (!Array.isArray(ids) || new Set(ids).size !== ids.length) return c.json({ message: 'Danh sách không hợp lệ' }, 400);
+  const all = await c.env.DB.prepare("SELECT id FROM posts WHERE type='GUIDE'").all<{ id: string }>();
+  if (ids.length !== all.results.length || ids.some(id => !all.results.some(row => row.id === id))) return c.json({ message: 'Cần gửi đủ hướng dẫn để sắp xếp' }, 400);
+  if (ids.length) await c.env.DB.batch(ids.map((id, i) => c.env.DB.prepare('UPDATE posts SET sort_index=?,updated_at=? WHERE id=?').bind(i + 1, now(), id)));
+  return c.json({ ok: true });
+});
 app.delete('/posts/:id', requireAuth, requireAdmin, async c => { await drizzle(c.env.DB).delete(posts).where(eq(posts.id, c.req.param('id')!)); return c.json({ ok: true }); });
+
+app.get('/post-categories', async c => c.json((await c.env.DB.prepare('SELECT id,name,slug FROM post_categories ORDER BY name').all()).results));
+app.post('/post-categories', requireAuth, async c => { const body = await c.req.json<any>(); const name = String(body.name || '').trim(); if (!name) return c.json({ message: 'Tên danh mục là bắt buộc' }, 400); const slug = slugify(String(body.slug || name)); if (await c.env.DB.prepare('SELECT id FROM post_categories WHERE slug=?').bind(slug).first()) return c.json({ message: 'Slug danh mục đã tồn tại' }, 409); const id = crypto.randomUUID(); await c.env.DB.prepare('INSERT INTO post_categories (id,name,slug,created_at) VALUES (?,?,?,?)').bind(id, name, slug, now()).run(); return c.json({ id, name, slug }, 201); });
+app.patch('/post-categories/:id', requireAuth, async c => { const body = await c.req.json<any>(); const current = await c.env.DB.prepare('SELECT * FROM post_categories WHERE id=?').bind(c.req.param('id')).first<any>(); if (!current) return c.json({ message: 'Không tìm thấy danh mục' }, 404); const name = String(body.name || current.name).trim(); const slug = body.slug ? slugify(String(body.slug)) : current.slug; await c.env.DB.prepare('UPDATE post_categories SET name=?,slug=? WHERE id=?').bind(name, slug, c.req.param('id')).run(); return c.json({ ok: true }); });
+app.delete('/post-categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM post_categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
+
+const publicSettingKeys = ['site_name', 'logo_url', 'pinned_tag_ids', 'contact_phone', 'contact_email', 'contact_address', 'contact_facebook', 'contact_zalo'];
+app.get('/settings', async c => { const rows = await c.env.DB.prepare(`SELECT key,value FROM settings WHERE key IN (${publicSettingKeys.map(() => '?').join(',')})`).bind(...publicSettingKeys).all<{ key: string; value: string }>(); return c.json(Object.fromEntries(rows.results.map(row => [row.key, row.value]))); });
+app.get('/admin/settings', requireAuth, requireAdmin, async c => c.json((await c.env.DB.prepare('SELECT key,value FROM settings ORDER BY key').all()).results));
+app.put('/admin/settings', requireAuth, requireAdmin, async c => { const body = await c.req.json<{ key: string; value: string }>(); const key = String(body.key || '').trim(); if (!/^[a-z][a-z0-9_]{1,63}$/.test(key) || typeof body.value !== 'string') return c.json({ message: 'Key hoặc value không hợp lệ' }, 400); if (['logo_url', 'contact_facebook', 'contact_zalo'].includes(key) && body.value && !/^(https?:\/\/|\/[^/])/.test(body.value)) return c.json({ message: 'URL phải bắt đầu bằng https://, http:// hoặc /' }, 400); if (key === 'pinned_tag_ids') { try { const ids = JSON.parse(body.value); if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error(); } catch { return c.json({ message: 'Tag ghim phải là danh sách ID' }, 400); } } await c.env.DB.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, body.value).run(); return c.json({ ok: true }); });
+app.delete('/admin/settings/:key', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM settings WHERE key=?').bind(c.req.param('key')).run(); return c.json({ ok: true }); });
 
 app.get('/rentals', requireAuth, async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(rentals).orderBy(rentals.startDate).limit(limit).offset(offset)); });
 app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate); if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400); const db = drizzle(c.env.DB); for (const item of body.items || []) { const product = await db.select().from(products).where(eq(products.id, item.productId)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get(); if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409); } const id = crypto.randomUUID(); const stamp = now(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, body.customerPhone || null, start.toISOString(), end.toISOString(), body.status || 'HOLD', body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp), ...(body.items || []).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0))]); return c.json({ id }, 201); });

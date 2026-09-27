@@ -3,8 +3,8 @@ main = "src/index.ts"
 compatibility_date = "2026-09-19"
 
 [vars]
-CORS_ORIGIN = "http://localhost:3000"
-APP_URL = "http://localhost:3000"
+CORS_ORIGIN = "https://honey-shop-web.nvtin1104.workers.dev"
+APP_URL = "https://honey-shop-web.nvtin1104.workers.dev"
 RESEND_FROM = "Honey Shop <noreply@example.com>"
 
 [[d1_databases]]
