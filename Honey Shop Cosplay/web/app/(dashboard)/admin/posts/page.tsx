@@ -2,10 +2,9 @@ import { ContentManager } from '../../../../components/admin/ContentManager';
 
 export default async function PostsPage() {
   return (
-    <div className="p-5 md:p-8">
-      <p className="text-sm font-semibold text-neutral-400">CONTENT</p>
-      <h1 className="mt-1 text-3xl font-bold tracking-tight">Bài viết</h1>
-      <div className="mt-7">
+    <div className="p-4 md:p-7">
+      <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 md:text-3xl">Bài viết</h1>
+      <div className="mt-4 md:mt-5">
         <ContentManager type="ARTICLE" />
       </div>
     </div>
