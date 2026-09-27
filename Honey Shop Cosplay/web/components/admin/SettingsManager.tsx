@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ProductTag, SiteSettings } from '../../lib/types';
+import { AdminButton, AdminCard, AdminField, AdminInput, AdminTextarea } from './AdminUI';
 
 const fields: [keyof SiteSettings, string][] = [
   ['site_name', 'Tên site'], ['logo_url', 'Logo URL'], ['contact_phone', 'Số điện thoại'],
@@ -61,14 +62,14 @@ export function SettingsManager() {
 
   return <div className="grid gap-6 xl:grid-cols-[1fr_.8fr]">
     <form onSubmit={save} className="admin-card grid gap-4 p-6"><h2 className="text-lg font-bold">Thông tin công khai</h2>
-      {fields.map(([name, label]) => <label key={name} className="text-sm font-semibold">{label}<input className="admin-input mt-1 w-full" type={name === 'contact_email' ? 'email' : 'text'} value={values[name] || ''} onChange={e => setValues(prev => ({ ...prev, [name]: e.target.value }))} /></label>)}
+      {fields.map(([name, label]) => <AdminField key={name} label={label} htmlFor={`site-setting-${name}`}><AdminInput id={`site-setting-${name}`} type={name === 'contact_email' ? 'email' : 'text'} value={values[name] || ''} onChange={e => setValues(prev => ({ ...prev, [name]: e.target.value }))} /></AdminField>)}
       <label className="text-sm">Tải logo lên <input type="file" accept="image/*" disabled={uploading} onChange={e => { if (e.target.files?.[0]) void upload(e.target.files[0]); }} /></label>
       {values.logo_url && <img src={values.logo_url} alt="Logo hiện tại" className="h-20 w-36 object-contain" />}
       <h3 className="font-bold">Tag ghim ở trang chủ</h3><p className="text-xs text-neutral-500">Chọn tag và dùng nút lên/xuống để sắp thứ tự nhóm đồ.</p>
       {tags.map(tag => <div key={tag.id} className="flex items-center gap-2 text-sm"><label className="flex flex-1 items-center gap-2"><input type="checkbox" checked={pinned.includes(tag.id)} onChange={e => setPinned(prev => e.target.checked ? [...prev, tag.id] : prev.filter(id => id !== tag.id))} />{tag.name}</label>{pinned.includes(tag.id) && <><button type="button" onClick={() => move(tag.id, -1)} aria-label={`Đưa ${tag.name} lên`}>↑</button><button type="button" onClick={() => move(tag.id, 1)} aria-label={`Đưa ${tag.name} xuống`}>↓</button><span className="w-5 text-right">{pinned.indexOf(tag.id) + 1}</span></>}</div>)}
-      <button className="rounded-lg bg-black px-4 py-3 font-bold text-white">Lưu cài đặt</button>
+      <AdminButton className="py-3">Lưu cài đặt</AdminButton>
       {message && <p role="status" className="text-sm text-amber-700">{message}</p>}
     </form>
-    <section className="admin-card self-start p-6"><h2 className="text-lg font-bold">Config key/value</h2><p className="mt-1 text-xs text-neutral-500">Các key tùy chỉnh chỉ xem được trong admin; không đưa lên API công khai.</p><form onSubmit={add} className="mt-4 grid gap-2"><input className="admin-input" placeholder="key_name" value={key} onChange={e => setKey(e.target.value)} required /><textarea className="admin-input" placeholder="Value" value={value} onChange={e => setValue(e.target.value)} /><button className="rounded-lg bg-neutral-900 py-2 text-sm font-bold text-white">Lưu key</button></form><div className="mt-5 space-y-2">{rows.filter(row => !known.has(row.key)).map(row => <div key={row.key} className="rounded border p-3 text-sm"><div className="flex justify-between"><b>{row.key}</b><button onClick={() => remove(row.key)} className="text-red-600">Xóa</button></div><p className="mt-1 break-all text-neutral-500">{row.value}</p><button onClick={() => { setKey(row.key); setValue(row.value); }} className="mt-2 text-blue-600">Sửa</button></div>)}</div></section>
+    <AdminCard className="self-start p-6"><h2 className="text-lg font-bold">Config key/value</h2><p className="mt-1 text-xs text-neutral-500">Các key tùy chỉnh chỉ xem được trong admin; không đưa lên API công khai.</p><form onSubmit={add} className="mt-4 grid gap-2"><AdminInput placeholder="key_name" value={key} onChange={e => setKey(e.target.value)} required /><AdminTextarea placeholder="Value" value={value} onChange={e => setValue(e.target.value)} /><AdminButton className="py-2">Lưu key</AdminButton></form><div className="mt-5 space-y-2">{rows.filter(row => !known.has(row.key)).map(row => <div key={row.key} className="rounded border p-3 text-sm"><div className="flex justify-between"><b>{row.key}</b><AdminButton type="button" variant="danger" className="px-2 py-1 text-xs" onClick={() => remove(row.key)}>Xóa</AdminButton></div><p className="mt-1 break-all text-neutral-500">{row.value}</p><AdminButton type="button" variant="ghost" className="mt-2 px-2 py-1 text-xs" onClick={() => { setKey(row.key); setValue(row.value); }}>Sửa</AdminButton></div>)}</div></AdminCard>
   </div>;
 }

@@ -156,6 +156,20 @@ button {
   background: #a8a29e;
 }
 
+.admin-select-options > div[role="listbox"] {
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+
+.admin-select-options > div[role="listbox"]::-webkit-scrollbar {
+  width: 5px;
+}
+
+.admin-select-options > div[role="listbox"]::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d6d3d1;
+}
+
 .editor-canvas:empty::before {
   content: attr(data-placeholder);
   color: #a3a3a3;

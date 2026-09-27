@@ -12,6 +12,7 @@ import {
   Loader2,
   Upload,
 } from 'lucide-react';
+import { AdminButton, AdminInput, AdminSelect, AdminTextarea } from './AdminUI';
 
 function slugify(text: string): string {
   return text
@@ -311,13 +312,13 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
                   Tên sản phẩm / Trang phục <span className="text-red-500">*</span>
                 </label>
-                <input
+                <AdminInput
                   type="text"
                   required
                   value={title}
                   onChange={(e) => handleTitleChange(e.target.value)}
                   placeholder="Ví dụ: Furina - Genshin Impact (Full Set)"
-                  className="admin-input mt-1 text-base font-medium"
+                  className="mt-1 text-base font-medium"
                   autoFocus
                 />
               </div>
@@ -338,13 +339,13 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                     </button>
                   )}
                 </div>
-                <input
+                <AdminInput
                   type="text"
                   required
                   value={slug}
                   onChange={(e) => handleSlugChange(e.target.value)}
                   placeholder="furina-genshin-impact"
-                  className="admin-input mt-1 font-mono text-sm"
+                  className="mt-1 font-mono text-sm"
                 />
                 <p className="mt-1 text-xs text-neutral-400">
                   Đường dẫn hiển thị: <span className="font-mono text-neutral-600">/cosplay/{slug || '...'}</span>
@@ -355,12 +356,12 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">
                   Mô tả chi tiết & Phụ kiện đi kèm
                 </label>
-                <textarea
+                <AdminTextarea
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Bao gồm: Trang phục nguyên set, wig tạo kiểu, mũ, găng tay, phụ kiện gài ngực... Size phù hợp 1m55 - 1m68."
-                  className="admin-input mt-1 text-sm"
+                  className="mt-1 text-sm"
                 />
               </div>
 
@@ -400,12 +401,12 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                             />
                             <span className="flex-1 text-sm">{p.title}</span>
                             {picked && (
-                              <input
+                              <AdminInput
                                 type="number"
                                 min={1}
                                 value={picked.quantity}
                                 onChange={(e) => setComboQuantity(p.id, Number(e.target.value) || 1)}
-                                className="admin-input w-16 py-1 text-xs"
+                                className="w-16 py-1 text-xs"
                               />
                             )}
                           </div>
@@ -430,13 +431,13 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
               ].map(([label, value, setter]: any) => (
                 <div key={label}>
                   <label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">{label}</label>
-                  <input
+                  <AdminInput
                     type="number"
                     min="0"
                     step="1000"
                     value={value}
                     onChange={(e) => setter(e.target.value)}
-                    className="admin-input mt-1 font-semibold"
+                    className="mt-1 font-semibold"
                     placeholder="0"
                   />
                   <p className="mt-1 text-xs font-medium text-emerald-600">{formatVnd(value)}</p>
@@ -457,23 +458,16 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <input
-                className="admin-input flex-1 min-w-[140px]"
+              <AdminInput
+                className="flex-1 min-w-[140px]"
                 placeholder="Tên danh mục mới"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
               />
-              <select className="admin-input w-44" value={newCategoryParent} onChange={(e) => setNewCategoryParent(e.target.value)}>
-                <option value="">Cấp gốc (VD: Game, Anime)</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={addCategory} className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white">
+              <div className="w-44"><AdminSelect options={categories.map(category => ({ value: category.id, label: category.name }))} value={newCategoryParent} onChange={setNewCategoryParent} placeholder="Cấp gốc (VD: Game, Anime)" ariaLabel="Danh mục cha" searchable={categories.length > 8} /></div>
+              <AdminButton type="button" onClick={addCategory} className="rounded-lg px-4 py-2">
                 Thêm
-              </button>
+              </AdminButton>
             </div>
           </div>
 
@@ -497,15 +491,15 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
               {tags.length === 0 && <p className="text-sm text-neutral-400">Chưa có tag nào.</p>}
             </div>
             <div className="mt-3 flex gap-2">
-              <input
-                className="admin-input flex-1"
+              <AdminInput
+                className="flex-1"
                 placeholder="Tag mới, VD: Hot"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
               />
-              <button type="button" onClick={addTag} className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white">
+              <AdminButton type="button" onClick={addTag} className="rounded-lg px-4 py-2">
                 Thêm
-              </button>
+              </AdminButton>
             </div>
           </div>
         </div>
@@ -561,12 +555,12 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
 
             <div className="mt-3">
               <label className="block text-xs font-medium text-neutral-600">Hoặc nhập URL ảnh (link ngoài)</label>
-              <input
+              <AdminInput
                 type="text"
                 value={thumbnailUrl}
                 onChange={(e) => setThumbnailUrl(e.target.value)}
                 placeholder="https://... hoặc /assets/..."
-                className="admin-input mt-1 font-mono text-xs"
+                className="mt-1 font-mono text-xs"
               />
             </div>
 
@@ -596,10 +590,10 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
 
           {/* Action Card */}
           <div className="admin-card p-6 space-y-3">
-            <button
+            <AdminButton
               type="submit"
               disabled={isPending || success}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-black py-3 text-sm font-bold text-white shadow-md hover:bg-neutral-800 disabled:opacity-50 transition-all"
+              className="w-full py-3 shadow-md"
             >
               {isPending ? (
                 <>
@@ -616,7 +610,7 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
               ) : (
                 'Lưu và đăng sản phẩm'
               )}
-            </button>
+            </AdminButton>
 
             <Link
               href="/admin/products"

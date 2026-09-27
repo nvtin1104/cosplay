@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, ExternalLink } from 'lucide-react';
 import type { AuthUser, Post, Product } from '../../lib/types';
+import { AdminButton, AdminInput, AdminSelect, AdminTextarea } from './AdminUI';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -397,14 +398,14 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
       {open && (
         <form onSubmit={create} className="admin-card mb-6 grid gap-4 p-6">
           <div className="grid gap-4 sm:grid-cols-2">
-            <input className="admin-input" name="customerName" placeholder="Tên khách hàng" required />
-            <input className="admin-input" name="customerPhone" placeholder="Số điện thoại" />
-            <input className="admin-input" name="startDate" type="datetime-local" required />
-            <input className="admin-input" name="endDate" type="datetime-local" required />
-            <input className="admin-input" name="deposit" type="number" min="0" placeholder="Tiền cọc" />
-            <input className="admin-input" name="totalAmount" type="number" min="0" placeholder="Tổng tiền" />
+            <AdminInput name="customerName" placeholder="Tên khách hàng" required />
+            <AdminInput name="customerPhone" placeholder="Số điện thoại" />
+            <AdminInput name="startDate" type="datetime-local" required />
+            <AdminInput name="endDate" type="datetime-local" required />
+            <AdminInput name="deposit" type="number" min="0" placeholder="Tiền cọc" />
+            <AdminInput name="totalAmount" type="number" min="0" placeholder="Tổng tiền" />
           </div>
-          <textarea className="admin-input" name="note" placeholder="Ghi chú" />
+          <AdminTextarea name="note" placeholder="Ghi chú" />
           <div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Sản phẩm thuê</span>
@@ -415,37 +416,35 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
             <div className="mt-2 space-y-2">
               {rows.map((row, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <select
-                    className="admin-input flex-1"
+                  <AdminSelect
+                    className="flex-1"
+                    ariaLabel="Sản phẩm thuê"
+                    options={products.map(product => ({ value: product.id, label: product.title }))}
                     value={row.productId}
-                    onChange={(e) => updateRow(idx, { productId: e.target.value })}
-                  >
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
-                  </select>
-                  <input
-                    className="admin-input w-20"
+                    onChange={(productId) => updateRow(idx, { productId })}
+                  />
+                  <AdminInput
+                    className="w-20"
                     type="number"
                     min="1"
                     value={row.quantity}
                     onChange={(e) => updateRow(idx, { quantity: Number(e.target.value) || 1 })}
                   />
-                  <input
-                    className="admin-input w-28"
+                  <AdminInput
+                    className="w-28"
                     type="number"
                     min="0"
                     value={row.price}
                     onChange={(e) => updateRow(idx, { price: Number(e.target.value) || 0 })}
                   />
-                  <button type="button" onClick={() => removeRow(idx)} className="text-xs font-semibold text-red-500">
+                  <AdminButton type="button" variant="danger" onClick={() => removeRow(idx)} className="px-2 py-1 text-xs">
                     Xóa
-                  </button>
+                  </AdminButton>
                 </div>
               ))}
             </div>
           </div>
-          <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white">Lưu lịch thuê</button>
+          <AdminButton className="px-4 py-3">Lưu lịch thuê</AdminButton>
         </form>
       )}
       {loading && items.length === 0 ? (
@@ -478,16 +477,17 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
                       <td>{Number(r.deposit || 0).toLocaleString('vi-VN')}đ</td>
                       <td>{Number(r.totalAmount || 0).toLocaleString('vi-VN')}đ</td>
                       <td>
-                        <select
-                          className="rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-xs font-semibold disabled:opacity-60"
+                        <AdminSelect
+                          className="!mt-0 min-w-36"
+                          size="compact"
+                          ariaLabel={`Trạng thái lịch thuê ${r.id}`}
                           value={r.status}
+                          searchable={false}
+                          allowEmpty={false}
                           disabled={locked || savingId === r.id}
-                          onChange={(e) => changeStatus(r.id, e.target.value)}
-                        >
-                          {RENTAL_STATUSES.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
+                          onChange={(status) => changeStatus(r.id, status)}
+                          options={RENTAL_STATUSES.map(status => ({ value: status, label: status }))}
+                        />
                       </td>
                     </tr>
                   );
@@ -594,25 +594,22 @@ export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {
 
   const form = (post?: Post | null) => (
     <form onSubmit={save} className="admin-card mb-6 grid gap-4 p-6">
-      <input className="admin-input" name="title" placeholder="Tiêu đề" defaultValue={post?.title} required />
-      <input className="admin-input" name="slug" placeholder="slug-bai-viet" defaultValue={post?.slug} required />
-      <select className="admin-input" name="type" defaultValue={post?.type || 'ARTICLE'}>
-        <option value="ARTICLE">Bài viết</option>
-        <option value="GUIDE">Hướng dẫn</option>
-      </select>
-      <textarea className="admin-input" name="excerpt" placeholder="Tóm tắt" defaultValue={post?.excerpt ?? undefined} />
-      <textarea className="admin-input min-h-40" name="content" placeholder="Nội dung" defaultValue={post?.content} required />
+      <AdminInput name="title" placeholder="Tiêu đề" defaultValue={post?.title} required />
+      <AdminInput name="slug" placeholder="slug-bai-viet" defaultValue={post?.slug} required />
+      <AdminSelect name="type" ariaLabel="Loại nội dung" defaultValue={post?.type || 'ARTICLE'} searchable={false} options={[{ value: 'ARTICLE', label: 'Bài viết' }, { value: 'GUIDE', label: 'Hướng dẫn' }]} />
+      <AdminTextarea name="excerpt" placeholder="Tóm tắt" defaultValue={post?.excerpt ?? undefined} />
+      <AdminTextarea className="min-h-40" name="content" placeholder="Nội dung" defaultValue={post?.content} required />
       <div className="flex gap-3">
-        <button className="rounded-lg bg-black px-4 py-3 font-semibold text-white">
+        <AdminButton className="px-4 py-3">
           {post ? 'Lưu thay đổi' : 'Lưu nháp'}
-        </button>
-        <button
+        </AdminButton>
+        <AdminButton variant="secondary"
           type="button"
           onClick={() => (post ? setEditing(null) : setOpen(false))}
-          className="rounded-lg border border-neutral-200 px-4 py-3 font-semibold text-neutral-600"
+          className="px-4 py-3"
         >
           Hủy
-        </button>
+        </AdminButton>
       </div>
       {!post && <p className="text-xs text-neutral-400">Bài viết sẽ lưu ở dạng nháp{isAdmin ? '' : ' — cần ADMIN xuất bản'}.</p>}
     </form>
@@ -738,15 +735,16 @@ export function UserManager() {
                 {!u.active && <span className="text-xs font-semibold text-red-500">Đã khóa</span>}
               </div>
               <div className="flex items-center gap-2">
-                <select
-                  className="rounded-full border border-neutral-200 bg-neutral-100 px-3 py-1 text-xs font-semibold disabled:opacity-60"
+                <AdminSelect
+                  className="w-36"
+                  size="compact"
+                  ariaLabel={`Vai trò của ${u.name}`}
                   value={u.role}
                   disabled={isSelf || savingId === u.id}
-                  onChange={(e) => updateUser(u.id, { role: e.target.value })}
-                >
-                  <option value="STAFF">STAFF</option>
-                  <option value="ADMIN">ADMIN</option>
-                </select>
+                  searchable={false}
+                  options={[{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }]}
+                  onChange={(role) => updateUser(u.id, { role })}
+                />
                 <button
                   disabled={isSelf || savingId === u.id}
                   onClick={() => updateUser(u.id, { active: !u.active })}
@@ -764,12 +762,9 @@ export function UserManager() {
       <div>
         <form onSubmit={invite} className="admin-card p-5">
           <h2 className="font-bold">Mời thành viên</h2>
-          <input className="admin-input mt-4" name="email" type="email" placeholder="staff@example.com" required />
-          <select className="admin-input mt-3" name="role">
-            <option value="STAFF">STAFF</option>
-            <option value="ADMIN">ADMIN</option>
-          </select>
-          <button className="mt-3 w-full rounded-lg bg-black py-3 font-semibold text-white">Gửi lời mời</button>
+          <AdminInput className="mt-4" name="email" type="email" placeholder="staff@example.com" required />
+          <AdminSelect name="role" ariaLabel="Vai trò thành viên" defaultValue="STAFF" searchable={false} options={[{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }]} />
+          <AdminButton className="mt-3 w-full py-3">Gửi lời mời</AdminButton>
           {message && <p className="mt-3 break-all text-xs leading-5 text-neutral-500">{message}</p>}
         </form>
         <div className="admin-card mt-5 overflow-hidden p-5">

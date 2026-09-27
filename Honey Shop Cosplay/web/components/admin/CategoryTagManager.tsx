@@ -27,6 +27,7 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import type { AuthUser, Category, ProductTag } from '../../lib/types';
+import { AdminButton, AdminInput, AdminSelect } from './AdminUI';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -224,8 +225,8 @@ function CategoryImageField({
           </div>
           {showUrlInput && (
             <div className="flex items-center gap-1.5 pt-1">
-              <input
-                className="admin-input py-1 text-xs"
+              <AdminInput
+                className="py-1 text-xs"
                 placeholder="https://... dán link ảnh trực tiếp"
                 value={urlDraft}
                 onChange={(e) => setUrlDraft(e.target.value)}
@@ -473,8 +474,8 @@ function CategoryNode({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-neutral-600 mb-1">Tên danh mục *</label>
-                <input
-                  className="admin-input py-1.5 text-sm"
+                <AdminInput
+                  className="py-1.5 text-sm"
                   value={editName}
                   onChange={(e) => {
                     setEditName(e.target.value);
@@ -498,8 +499,8 @@ function CategoryNode({
                     Tự sinh theo tên
                   </button>
                 </div>
-                <input
-                  className="admin-input py-1.5 text-sm font-mono"
+                <AdminInput
+                  className="py-1.5 text-sm font-mono"
                   value={editSlug}
                   onChange={(e) => {
                     setAutoSlug(false);
@@ -737,8 +738,8 @@ function CategoryNode({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[11px] font-medium text-neutral-600 mb-1">Tên mục con *</label>
-                <input
-                  className="admin-input py-1.5 text-sm"
+                <AdminInput
+                  className="py-1.5 text-sm"
                   placeholder="VD: Trang phục, Vũ khí, Wig..."
                   value={childName}
                   onChange={(e) => {
@@ -762,8 +763,8 @@ function CategoryNode({
                     Tự sinh slug
                   </button>
                 </div>
-                <input
-                  className="admin-input py-1.5 text-sm font-mono"
+                <AdminInput
+                  className="py-1.5 text-sm font-mono"
                   placeholder="VD: trang-phuc, vu-khi"
                   value={childSlug}
                   onChange={(e) => {
@@ -795,13 +796,13 @@ function CategoryNode({
                 >
                   Hủy
                 </button>
-                <button
+                <AdminButton
                   type="button"
                   onClick={addChild}
-                  className="rounded-lg bg-black px-4 py-1 text-xs font-semibold text-white hover:bg-neutral-800"
+                  className="rounded-lg px-4 py-1 text-xs"
                 >
                   Tạo mục con
-                </button>
+                </AdminButton>
               </div>
             </div>
           </div>
@@ -820,30 +821,20 @@ function CategoryNode({
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                className="admin-input py-1.5 text-sm flex-1 min-w-[200px]"
+              <div className="min-w-[200px] flex-1"><AdminSelect
+                ariaLabel="Danh mục cha mới"
+                placeholder="-- Chuyển thành Cấp 1 (Danh mục gốc) --"
                 value={newParentId}
-                onChange={(e) => setNewParentId(e.target.value)}
-              >
-                <option value="">-- Chuyển thành Cấp 1 (Danh mục gốc) --</option>
-                {categories
-                  .filter((c) => !invalidMoveIds.has(c.id))
-                  .map((c) => {
-                    const cPath = getCategoryPath(c, categories);
-                    return (
-                      <option key={c.id} value={c.id}>
-                        {cPath.names.join(' > ')} [key: {c.slug}]
-                      </option>
-                    );
-                  })}
-              </select>
-              <button
+                onChange={setNewParentId}
+                options={categories.filter(category => !invalidMoveIds.has(category.id)).map(category => ({ value: category.id, label: `${getCategoryPath(category, categories).names.join(' > ')} [key: ${category.slug}]` }))}
+              /></div>
+                <AdminButton
                 type="button"
                 onClick={move}
-                className="rounded-lg bg-black px-4 py-1.5 text-xs font-semibold text-white hover:bg-neutral-800"
+                  className="px-4 py-1.5 text-xs"
               >
                 Xác nhận đổi tầng
-              </button>
+                </AdminButton>
               <button
                 type="button"
                 onClick={() => setMoving(false)}
@@ -1121,8 +1112,8 @@ export function CategoryManager() {
       <div className="admin-card p-4 flex flex-wrap items-center justify-between gap-3 bg-white">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
-          <input
-            className="admin-input pl-10 pr-4 py-2 text-sm"
+          <AdminInput
+            className="pl-10 pr-4 py-2 text-sm"
             placeholder="Tìm theo tên danh mục hoặc key/slug..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -1181,8 +1172,8 @@ export function CategoryManager() {
               <label className="block text-xs font-semibold text-neutral-700 mb-1.5">
                 Tên danh mục gốc *
               </label>
-              <input
-                className="admin-input py-2 text-sm"
+              <AdminInput
+                className="py-2 text-sm"
                 placeholder="VD: Anime & Manga, Game, Phụ kiện Cosplay"
                 value={newRootName}
                 onChange={(e) => {
@@ -1208,8 +1199,8 @@ export function CategoryManager() {
                   Tự động tạo slug
                 </button>
               </div>
-              <input
-                className="admin-input py-2 text-sm font-mono"
+              <AdminInput
+                className="py-2 text-sm font-mono"
                 placeholder="VD: anime-manga, game, phu-kien"
                 value={newRootSlug}
                 onChange={(e) => {
@@ -1241,12 +1232,12 @@ export function CategoryManager() {
               >
                 Đóng
               </button>
-              <button
+              <AdminButton
                 type="submit"
-                className="rounded-lg bg-black px-5 py-2 text-xs font-semibold text-white hover:bg-neutral-800"
+                className="rounded-lg px-5 py-2 text-xs"
               >
                 + Xác nhận tạo Tầng 1
-              </button>
+              </AdminButton>
             </div>
           </div>
         </form>
@@ -1400,13 +1391,13 @@ export function TagManager() {
     <div className="space-y-5">
       <ErrorBanner message={error} />
       <form onSubmit={addTag} className="admin-card flex flex-wrap items-center gap-3 p-5">
-        <input
-          className="admin-input max-w-xs flex-1"
+        <AdminInput
+          className="max-w-xs flex-1"
           placeholder="Tag mới, VD: Đồ mới, Sale, Hot"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
-        <button className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white">+ Thêm tag</button>
+        <AdminButton>+ Thêm tag</AdminButton>
       </form>
 
       <div className="admin-card overflow-hidden">
@@ -1419,8 +1410,8 @@ export function TagManager() {
             <div key={tag.id} className="flex items-center justify-between gap-3 border-b border-neutral-100 p-4 last:border-0">
               {editingId === tag.id ? (
                 <>
-                  <input
-                    className="admin-input flex-1 py-1.5 text-sm"
+                  <AdminInput
+                    className="flex-1 py-1.5 text-sm"
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
                     autoFocus
