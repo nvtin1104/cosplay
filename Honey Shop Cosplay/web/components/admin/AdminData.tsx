@@ -226,7 +226,6 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
                         </div>
                         <div className="flex items-center gap-2 text-xs text-neutral-400">
                           <span>{p.slug}</span>
-                          {p.location && <span>• Vị trí: {p.location}</span>}
                         </div>
                       </div>
                     </div>
@@ -358,6 +357,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
         method: 'POST',
         body: JSON.stringify({
           customerName: f.get('customerName'),
+          customerEmail: f.get('customerEmail'),
           customerPhone: f.get('customerPhone'),
           startDate: f.get('startDate'),
           endDate: f.get('endDate'),
@@ -399,6 +399,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
         <form onSubmit={create} className="admin-card mb-6 grid gap-4 p-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <AdminInput name="customerName" placeholder="Tên khách hàng" required />
+            <AdminInput name="customerEmail" type="email" placeholder="Email khách (để liên kết tài khoản & tích điểm)" required />
             <AdminInput name="customerPhone" placeholder="Số điện thoại" />
             <AdminInput name="startDate" type="datetime-local" required />
             <AdminInput name="endDate" type="datetime-local" required />
@@ -469,7 +470,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
                     <tr className="border-b border-neutral-100" key={r.id}>
                       <td className="p-4">
                         <b>{r.customerName}</b>
-                        <p className="text-xs text-neutral-400">{r.customerPhone}</p>
+                        <p className="text-xs text-neutral-400">{[r.customerPhone, r.customerEmail].filter(Boolean).join(' · ')}</p>
                       </td>
                       <td>
                         {new Date(r.startDate).toLocaleDateString('vi-VN')} — {new Date(r.endDate).toLocaleDateString('vi-VN')}

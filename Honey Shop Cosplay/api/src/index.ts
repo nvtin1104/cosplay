@@ -11,11 +11,166 @@ const app = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>();
 const now = () => new Date().toISOString();
 const plusHours = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
 const safeUser = (user: any) => ({ id: user.id, email: user.email, name: user.name, role: user.role, active: !!user.active });
+const CUSTOMER_SESSION_COOKIE = 'honey_customer_session';
+async function customerFromRequest(c: any) {
+  const token = getCookie(c, CUSTOMER_SESSION_COOKIE);
+  if (!token) return null;
+  return c.env.DB.prepare('SELECT a.id,a.email,a.name,a.facebook_url facebookUrl FROM customer_sessions s JOIN customer_accounts a ON a.id=s.customer_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1').bind(await sha256(token), now()).first();
+}
+async function createCustomerSession(c: any, customerId: string) {
+  const token = randomToken();
+  await c.env.DB.prepare('INSERT INTO customer_sessions (id,customer_id,token_hash,expires_at,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(), customerId, await sha256(token), plusHours(24 * 30), now()).run();
+  setCookie(c, CUSTOMER_SESSION_COOKIE, token, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 2592000 });
+}
 
 app.onError((err, c) => { console.error('API Error:', err); return c.json({ message: err.message || 'Lỗi máy chủ nội bộ' }, 500); });
 app.use('*', async (c, next) => cors({ origin: c.env.CORS_ORIGIN || c.env.APP_URL || '*', credentials: true, allowHeaders: ['Content-Type'], allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'] })(c, next));
 app.use('*', async (c, next) => { if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && !validOrigin(c)) return c.json({ message: 'Invalid request origin' }, 403); await next(); });
 app.get('/health', c => c.json({ ok: true, service: 'honey-shop-api-worker', runtime: 'cloudflare-workers', timestamp: now() }));
+
+app.post('/customers/register', async c => {
+  const body = await c.req.json<any>();
+  const email = String(body.email || '').trim().toLowerCase();
+  const name = String(body.name || '').trim();
+  const password = String(body.password || '');
+  if (!/^\S+@\S+\.\S+$/.test(email) || !name || password.length < 10) return c.json({ message: 'Nhập tên, email hợp lệ và mật khẩu từ 10 ký tự.' }, 400);
+  if (await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE email=?').bind(email).first()) return c.json({ message: 'Email này đã có tài khoản. Hãy đăng nhập.' }, 409);
+  const pass = await hashPassword(password);
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare('INSERT INTO customer_accounts (id,email,name,password_hash,password_salt,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').bind(id, email, name, pass.hash, pass.salt, now(), now()).run();
+  await createCustomerSession(c, id);
+  return c.json({ user: { id, email, name, facebookUrl: null } }, 201);
+});
+app.post('/customers/login', async c => {
+  const body = await c.req.json<any>();
+  const email = String(body.email || '').trim().toLowerCase();
+  const ipHash = await sha256(c.req.header('CF-Connecting-IP') || 'local'); const since = new Date(Date.now() - 15 * 60000).toISOString();
+  const failed = await c.env.DB.prepare('SELECT count(*) count FROM login_attempts WHERE email=? AND ip_hash=? AND successful=0 AND created_at>?').bind(email, ipHash, since).first<{ count: number }>();
+  if (Number(failed?.count || 0) >= 8) return c.json({ message: 'Đăng nhập tạm khóa. Vui lòng thử lại sau 15 phút.' }, 429);
+  const customer = await c.env.DB.prepare('SELECT * FROM customer_accounts WHERE email=?').bind(email).first<any>();
+  const valid = !!customer?.active && !!customer?.password_hash && await verifyPassword(String(body.password || ''), customer.password_salt, customer.password_hash);
+  await c.env.DB.prepare('INSERT INTO login_attempts (id,email,ip_hash,successful,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(), email, ipHash, valid ? 1 : 0, now()).run();
+  if (!valid) return c.json({ message: 'Email hoặc mật khẩu không đúng.' }, 401);
+  await createCustomerSession(c, customer.id);
+  return c.json({ user: { id: customer.id, email: customer.email, name: customer.name, facebookUrl: customer.facebook_url } });
+});
+app.post('/customers/google', async c => {
+  if (!c.env.GOOGLE_CLIENT_ID) return c.json({ message: 'Chưa cấu hình Google Client ID cho hệ thống.' }, 503);
+  const { credential } = await c.req.json<any>();
+  if (!credential) return c.json({ message: 'Thiếu thông tin đăng nhập Google.' }, 400);
+  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(String(credential))}`);
+  if (!response.ok) return c.json({ message: 'Thông tin Google không hợp lệ.' }, 401);
+  const identity = await response.json() as { aud?: string; email_verified?: string; exp?: string; email?: string; name?: string };
+  if (identity.aud !== c.env.GOOGLE_CLIENT_ID || identity.email_verified !== 'true' || Number(identity.exp) * 1000 <= Date.now()) return c.json({ message: 'Không xác minh được tài khoản Google.' }, 401);
+  const email = String(identity.email || '').toLowerCase();
+  let customer = await c.env.DB.prepare('SELECT id,email,name,facebook_url facebookUrl,active FROM customer_accounts WHERE email=?').bind(email).first<any>();
+  if (customer && !customer.active) return c.json({ message: 'Tài khoản đang tạm khóa. Hãy liên hệ shop để được hỗ trợ.' }, 403);
+  if (!customer) {
+    const id = crypto.randomUUID(); const stamp = now(); const name = String(identity.name || email.split('@')[0]);
+    await c.env.DB.prepare('INSERT INTO customer_accounts (id,email,name,created_at,updated_at) VALUES (?,?,?,?,?)').bind(id, email, name, stamp, stamp).run();
+    customer = { id, email, name, facebookUrl: null };
+  }
+  await createCustomerSession(c, customer.id);
+  return c.json({ user: customer });
+});
+app.get('/customers/me', async c => {
+  const customer = await customerFromRequest(c);
+  return customer ? c.json({ user: customer }) : c.json({ message: 'Vui lòng đăng nhập.' }, 401);
+});
+app.patch('/customers/me', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập.' }, 401);
+  const body = await c.req.json<any>(); const name = String(body.name || '').trim(); const facebookUrl = String(body.facebookUrl || '').trim();
+  if (!name) return c.json({ message: 'Tên hiển thị không được để trống.' }, 400);
+  if (facebookUrl && !/^https:\/\/(www\.)?facebook\.com\//i.test(facebookUrl)) return c.json({ message: 'Link Facebook không hợp lệ.' }, 400);
+  await c.env.DB.prepare('UPDATE customer_accounts SET name=?,facebook_url=?,updated_at=? WHERE id=?').bind(name, facebookUrl || null, now(), customer.id).run();
+  return c.json({ user: { ...customer, name, facebookUrl: facebookUrl || null } });
+});
+app.get('/customers/rentals', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập.' }, 401);
+  const result = await c.env.DB.prepare('SELECT r.id,r.customer_name customerName,r.start_date startDate,r.end_date endDate,r.status,r.deposit,r.total_amount totalAmount,r.created_at createdAt,ri.quantity,ri.price,p.title productTitle,p.slug productSlug,p.thumbnail_url thumbnailUrl FROM rentals r LEFT JOIN rental_items ri ON ri.rental_id=r.id LEFT JOIN products p ON p.id=ri.product_id WHERE lower(r.customer_email)=? ORDER BY r.start_date DESC LIMIT 100').bind(customer.email.toLowerCase()).all<any>();
+  return c.json(result.results);
+});
+app.get('/customers/points', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập.' }, 401);
+  const [summary, ledger, settings] = await Promise.all([
+    c.env.DB.prepare('SELECT coalesce(sum(points_delta),0) balance FROM loyalty_transactions WHERE customer_id=?').bind(customer.id).first<{ balance: number }>(),
+    c.env.DB.prepare('SELECT id,event_type eventType,points_delta pointsDelta,note,created_at createdAt FROM loyalty_transactions WHERE customer_id=? ORDER BY created_at DESC LIMIT 100').bind(customer.id).all<any>(),
+    c.env.DB.prepare("SELECT key,value FROM settings WHERE key IN ('points_currency_step','points_per_step','points_value_vnd')").all<{ key: string; value: string }>(),
+  ]);
+  return c.json({ balance: Number(summary?.balance || 0), ledger: ledger.results, settings: Object.fromEntries(settings.results.map(row => [row.key, Number(row.value)])) });
+});
+app.get('/customers/feedback', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập.' }, 401);
+  const rows = await c.env.DB.prepare('SELECT f.id,f.content,f.image_url imageUrl,f.status,f.created_at createdAt,p.title productTitle,p.slug productSlug FROM product_feedback f JOIN products p ON p.id=f.product_id WHERE f.customer_id=? ORDER BY f.created_at DESC LIMIT 100').bind(customer.id).all<any>();
+  return c.json(rows.results);
+});
+app.post('/customers/points/redeem', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Đăng nhập tài khoản khách để đổi điểm.' }, 401);
+  const settings = await c.env.DB.prepare("SELECT value FROM settings WHERE key='points_redemption_enabled'").first<{ value: string }>();
+  if (settings?.value === '0') return c.json({ message: 'Shop đang tạm dừng đổi điểm.' }, 400);
+  const body = await c.req.json<any>();
+  const product = await c.env.DB.prepare("SELECT id,slug,title,points_price pointsPrice,total_quantity totalQuantity,status FROM products WHERE slug=? AND status='AVAILABLE'").bind(String(body.productSlug || '')).first<any>();
+  if (!product || Number(product.pointsPrice) <= 0) return c.json({ message: 'Sản phẩm này hiện chưa áp dụng đổi điểm.' }, 400);
+  const start = new Date(body.startDate); const end = new Date(body.endDate); const phone = String(body.customerPhone || '').trim();
+  if (!phone || !Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || end <= start) return c.json({ message: 'Nhập số điện thoại và khoảng ngày thuê hợp lệ.' }, 400);
+  const balance = await c.env.DB.prepare('SELECT coalesce(sum(points_delta),0) balance FROM loyalty_transactions WHERE customer_id=?').bind(customer.id).first<{ balance: number }>();
+  if (Number(balance?.balance || 0) < Number(product.pointsPrice)) return c.json({ message: `Bạn cần ${product.pointsPrice} điểm để đổi sản phẩm này.` }, 400);
+  const overlap = await c.env.DB.prepare("SELECT coalesce(sum(ri.quantity),0) quantity FROM rental_items ri JOIN rentals r ON r.id=ri.rental_id WHERE ri.product_id=? AND r.status!='CANCELLED' AND r.start_date<? AND r.end_date>?").bind(product.id, end.toISOString(), start.toISOString()).first<{ quantity: number }>();
+  if (Number(overlap?.quantity || 0) >= Number(product.totalQuantity || 1)) return c.json({ message: 'Sản phẩm đã có lịch thuê trùng khoảng ngày này.' }, 409);
+  const rentalId = crypto.randomUUID(); const stamp = now();
+  try { await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(rentalId, customer.name, customer.email, phone, start.toISOString(), end.toISOString(), 'HOLD', 0, 0, 'Đổi bằng điểm thành viên', stamp, stamp),
+    c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), rentalId, product.id, null, 1, 0),
+    c.env.DB.prepare("INSERT INTO loyalty_transactions (id,customer_id,rental_id,source_key,event_type,points_delta,note,created_at) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), customer.id, rentalId, `redeem:${rentalId}`, 'REDEEM', -Number(product.pointsPrice), `Đổi ${product.title}`, stamp),
+  ]); } catch { return c.json({ message: 'Số dư điểm vừa thay đổi. Hãy tải lại tài khoản và thử lại.' }, 409); }
+  return c.json({ id: rentalId, pointsUsed: Number(product.pointsPrice), status: 'HOLD' }, 201);
+});
+app.post('/customers/logout', async c => { const token = getCookie(c, CUSTOMER_SESSION_COOKIE); if (token) await c.env.DB.prepare('DELETE FROM customer_sessions WHERE token_hash=?').bind(await sha256(token)).run(); deleteCookie(c, CUSTOMER_SESSION_COOKIE, { path: '/' }); return c.json({ ok: true }); });
+
+app.get('/admin/customers', requireAuth, requireAdmin, async c => {
+  const q = `%${String(c.req.query('q') || '').trim().toLowerCase()}%`;
+  const result = await c.env.DB.prepare("SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.active,a.created_at createdAt,coalesce((SELECT sum(points_delta) FROM loyalty_transactions l WHERE l.customer_id=a.id),0) points, (SELECT count(*) FROM rentals r WHERE lower(r.customer_email)=lower(a.email)) rentalCount FROM customer_accounts a WHERE lower(a.email) LIKE ? OR lower(a.name) LIKE ? ORDER BY a.created_at DESC LIMIT 300").bind(q, q).all<any>();
+  return c.json(result.results.map(row => ({ ...row, active: !!row.active, points: Number(row.points) })));
+});
+app.patch('/admin/customers/:id', requireAuth, requireAdmin, async c => {
+  const id = c.req.param('id')!; const body = await c.req.json<any>();
+  const current = await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE id=?').bind(id).first();
+  if (!current) return c.json({ message: 'Không tìm thấy tài khoản khách.' }, 404);
+  if (body.name !== undefined && !String(body.name).trim()) return c.json({ message: 'Tên không được để trống.' }, 400);
+  if (body.facebookUrl && !/^https:\/\/(www\.)?facebook\.com\//i.test(String(body.facebookUrl))) return c.json({ message: 'Link Facebook không hợp lệ.' }, 400);
+  await c.env.DB.prepare('UPDATE customer_accounts SET name=coalesce(?,name),facebook_url=coalesce(?,facebook_url),active=coalesce(?,active),updated_at=? WHERE id=?').bind(body.name === undefined ? null : String(body.name).trim(), body.facebookUrl === undefined ? null : String(body.facebookUrl).trim(), body.active === undefined ? null : body.active ? 1 : 0, now(), id).run();
+  if (body.active === false) await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id=?').bind(id).run();
+  return c.json({ ok: true });
+});
+app.post('/admin/customers/:id/points', requireAuth, requireAdmin, async c => {
+  const id = c.req.param('id')!; const body = await c.req.json<any>(); const delta = Math.trunc(Number(body.pointsDelta)); const note = String(body.note || '').trim();
+  if (!Number.isFinite(delta) || delta === 0 || !note) return c.json({ message: 'Nhập số điểm khác 0 và lý do điều chỉnh.' }, 400);
+  const customer = await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE id=?').bind(id).first();
+  if (!customer) return c.json({ message: 'Không tìm thấy tài khoản khách.' }, 404);
+  const balance = await c.env.DB.prepare('SELECT coalesce(sum(points_delta),0) balance FROM loyalty_transactions WHERE customer_id=?').bind(id).first<{ balance: number }>();
+  if (Number(balance?.balance || 0) + delta < 0) return c.json({ message: 'Điều chỉnh này làm số dư điểm âm.' }, 400);
+  await c.env.DB.prepare('INSERT INTO loyalty_transactions (id,customer_id,source_key,event_type,points_delta,note,created_by,created_at) VALUES (?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(), id, `adjust:${crypto.randomUUID()}`, 'ADJUST', delta, note, c.get('user').id, now()).run();
+  return c.json({ ok: true });
+});
+app.get('/admin/feedback', requireAuth, requireAdmin, async c => {
+  const status = c.req.query('status');
+  const sqlText = "SELECT f.id,f.product_id productId,p.title productTitle,p.slug productSlug,f.customer_id customerId,coalesce(a.name,f.customer_name) customerName,f.customer_email customerEmail,f.content,f.image_url imageUrl,f.hide_identity hideIdentity,f.status,f.created_at createdAt FROM product_feedback f JOIN products p ON p.id=f.product_id LEFT JOIN customer_accounts a ON a.id=f.customer_id";
+  const result = status ? await c.env.DB.prepare(`${sqlText} WHERE f.status=? ORDER BY f.created_at DESC LIMIT 500`).bind(status).all<any>() : await c.env.DB.prepare(`${sqlText} ORDER BY f.created_at DESC LIMIT 500`).all<any>();
+  return c.json(result.results.map(row => ({ ...row, hideIdentity: !!row.hideIdentity })));
+});
+app.patch('/admin/feedback/:id', requireAuth, requireAdmin, async c => {
+  const { status } = await c.req.json<{ status: string }>();
+  if (!['PENDING', 'APPROVED', 'HIDDEN'].includes(status)) return c.json({ message: 'Trạng thái feedback không hợp lệ.' }, 400);
+  const result = await c.env.DB.prepare('UPDATE product_feedback SET status=? WHERE id=?').bind(status, c.req.param('id')).run();
+  if (!result.meta.changes) return c.json({ message: 'Không tìm thấy feedback.' }, 404);
+  return c.json({ ok: true });
+});
+app.delete('/admin/feedback/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM product_feedback WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 
 app.post('/auth/login', async c => {
   const body = await c.req.json<{ email?: string; password?: string }>(); const email = body.email?.trim().toLowerCase();
@@ -56,6 +211,13 @@ async function attachTaxonomy(DB: D1Database, productId: string, body: any) {
     stmts.push(DB.prepare('DELETE FROM product_combo_items WHERE combo_product_id=?').bind(productId));
     for (const item of body.comboItems) stmts.push(DB.prepare('INSERT INTO product_combo_items (combo_product_id,item_product_id,quantity) VALUES (?,?,?)').bind(productId, item.productId, item.quantity || 1));
   }
+  if (Array.isArray(body.imageUrls)) {
+    stmts.push(DB.prepare('DELETE FROM product_images WHERE product_id=?').bind(productId));
+    for (const url of body.imageUrls) {
+      const value = String(url || '').trim();
+      if (value) stmts.push(DB.prepare("INSERT INTO product_images (id,product_id,url,kind) VALUES (?,?,?,'gallery')").bind(crypto.randomUUID(), productId, value));
+    }
+  }
   if (stmts.length) await DB.batch(stmts);
 }
 
@@ -87,9 +249,33 @@ app.get('/products', async c => {
 });
 app.get('/products/id/:id', requireAuth, async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.id, c.req.param('id')!)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
 app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(and(eq(products.slug, c.req.param('slug')), sql`${products.status} != 'ARCHIVED'`)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
-app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
-app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const { categoryIds, tagIds, comboItems, ...patch } = body; await db.update(products).set({ ...patch, updatedAt: now() }).where(eq(products.id, id)); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }); });
+app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, rewardPoints: Number(body.rewardPoints) || 0, pointsPrice: Number(body.pointsPrice) || 0, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
+app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const { categoryIds, tagIds, comboItems, imageUrls, ...patch } = body; await db.update(products).set({ ...patch, updatedAt: now() }).where(eq(products.id, id)); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy, images] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id), db.select().from(productImages).where(eq(productImages.productId, id))]); return c.json({ ...product, ...taxonomy, images }); });
 app.delete('/products/:id', requireAuth, requireAdmin, async c => { await drizzle(c.env.DB).update(products).set({ status: 'ARCHIVED', updatedAt: now() }).where(eq(products.id, c.req.param('id')!)); return c.json({ ok: true }); });
+
+app.get('/products/:slug/feedback', async c => {
+  const product = await c.env.DB.prepare("SELECT id FROM products WHERE slug=? AND status!='ARCHIVED'").bind(c.req.param('slug')).first<{ id: string }>();
+  if (!product) return c.json({ message: 'Không tìm thấy sản phẩm' }, 404);
+  const rows = await c.env.DB.prepare("SELECT id,customer_name customerName,content,image_url imageUrl,hide_identity hideIdentity,created_at createdAt FROM product_feedback WHERE product_id=? AND status='APPROVED' ORDER BY created_at DESC LIMIT 100").bind(product.id).all<any>();
+  return c.json(rows.results.map(row => ({ ...row, customerName: row.hideIdentity ? 'Khách thuê ẩn danh' : row.customerName, hideIdentity: !!row.hideIdentity })));
+});
+app.post('/products/:slug/feedback', async c => {
+  const body = await c.req.json<any>();
+  const customer = await customerFromRequest(c);
+  const name = customer?.name || String(body.customerName || '').trim();
+  const content = String(body.content || '').trim();
+  if (!name || content.length < 5) return c.json({ message: 'Vui lòng nhập tên và nội dung feedback (ít nhất 5 ký tự).' }, 400);
+  const product = await c.env.DB.prepare("SELECT id FROM products WHERE slug=? AND status!='ARCHIVED'").bind(c.req.param('slug')).first<{ id: string }>();
+  if (!product) return c.json({ message: 'Không tìm thấy sản phẩm' }, 404);
+  const id = crypto.randomUUID();
+  const createdAt = now();
+  const imageUrl = String(body.imageUrl || '').trim() || null;
+  if (imageUrl && !/^(https?:\/\/|\/[^/])/.test(imageUrl)) return c.json({ message: 'Đường dẫn ảnh không hợp lệ.' }, 400);
+  const email = customer?.email || String(body.customerEmail || '').trim().toLowerCase() || null;
+  const linkedCustomer = customer || (email ? await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE lower(email)=?').bind(email).first<{ id: string }>() : null);
+  await c.env.DB.prepare("INSERT INTO product_feedback (id,product_id,customer_name,customer_email,content,image_url,hide_identity,status,customer_id,created_at) VALUES (?,?,?,?,?,?,?,'PENDING',?,?)").bind(id, product.id, name, email, content, imageUrl, body.hideIdentity ? 1 : 0, linkedCustomer?.id || null, createdAt).run();
+  return c.json({ id, customerName: body.hideIdentity ? 'Khách thuê ẩn danh' : name, content, imageUrl, hideIdentity: !!body.hideIdentity, status: 'PENDING', createdAt }, 201);
+});
 
 const cleanContent = (value: unknown) => sanitizeHtml(String(value || ''), {
   allowedTags: ['p', 'br', 'h2', 'h3', 'h4', 'blockquote', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'img'],
@@ -177,15 +363,89 @@ app.post('/post-categories', requireAuth, async c => { const body = await c.req.
 app.patch('/post-categories/:id', requireAuth, async c => { const body = await c.req.json<any>(); const current = await c.env.DB.prepare('SELECT * FROM post_categories WHERE id=?').bind(c.req.param('id')).first<any>(); if (!current) return c.json({ message: 'Không tìm thấy danh mục' }, 404); const name = String(body.name || current.name).trim(); const slug = body.slug ? slugify(String(body.slug)) : current.slug; await c.env.DB.prepare('UPDATE post_categories SET name=?,slug=? WHERE id=?').bind(name, slug, c.req.param('id')).run(); return c.json({ ok: true }); });
 app.delete('/post-categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM post_categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 
-const publicSettingKeys = ['site_name', 'logo_url', 'pinned_tag_ids', 'contact_phone', 'contact_email', 'contact_address', 'contact_facebook', 'contact_zalo'];
+const publicSettingKeys = ['site_name', 'logo_url', 'pinned_tag_ids', 'contact_phone', 'contact_email', 'contact_address', 'contact_facebook', 'contact_zalo', 'points_redemption_enabled'];
 app.get('/settings', async c => { const rows = await c.env.DB.prepare(`SELECT key,value FROM settings WHERE key IN (${publicSettingKeys.map(() => '?').join(',')})`).bind(...publicSettingKeys).all<{ key: string; value: string }>(); return c.json(Object.fromEntries(rows.results.map(row => [row.key, row.value]))); });
 app.get('/admin/settings', requireAuth, requireAdmin, async c => c.json((await c.env.DB.prepare('SELECT key,value FROM settings ORDER BY key').all()).results));
-app.put('/admin/settings', requireAuth, requireAdmin, async c => { const body = await c.req.json<{ key: string; value: string }>(); const key = String(body.key || '').trim(); if (!/^[a-z][a-z0-9_]{1,63}$/.test(key) || typeof body.value !== 'string') return c.json({ message: 'Key hoặc value không hợp lệ' }, 400); if (['logo_url', 'contact_facebook', 'contact_zalo'].includes(key) && body.value && !/^(https?:\/\/|\/[^/])/.test(body.value)) return c.json({ message: 'URL phải bắt đầu bằng https://, http:// hoặc /' }, 400); if (key === 'pinned_tag_ids') { try { const ids = JSON.parse(body.value); if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error(); } catch { return c.json({ message: 'Tag ghim phải là danh sách ID' }, 400); } } await c.env.DB.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, body.value).run(); return c.json({ ok: true }); });
+app.put('/admin/settings', requireAuth, requireAdmin, async c => {
+  const body = await c.req.json<{ key: string; value: string }>();
+  const key = String(body.key || '').trim();
+  if (!/^[a-z][a-z0-9_]{1,63}$/.test(key) || typeof body.value !== 'string') return c.json({ message: 'Key hoặc value không hợp lệ' }, 400);
+  if (['logo_url', 'contact_facebook', 'contact_zalo'].includes(key) && body.value && !/^(https?:\/\/|\/[^/])/.test(body.value)) return c.json({ message: 'URL phải bắt đầu bằng https://, http:// hoặc /' }, 400);
+  if (['points_currency_step', 'points_per_step', 'points_value_vnd'].includes(key)) {
+    const number = Number(body.value);
+    if (!Number.isInteger(number) || number < (key === 'points_currency_step' ? 1 : 0)) return c.json({ message: 'Quy tắc điểm cần là số nguyên hợp lệ.' }, 400);
+  }
+  if (key === 'points_redemption_enabled' && !['0', '1'].includes(body.value)) return c.json({ message: 'Giá trị đổi điểm phải là 0 hoặc 1.' }, 400);
+  if (key === 'pinned_tag_ids') {
+    try { const ids = JSON.parse(body.value); if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error(); }
+    catch { return c.json({ message: 'Tag ghim phải là danh sách ID' }, 400); }
+  }
+  await c.env.DB.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, body.value).run();
+  return c.json({ ok: true });
+});
 app.delete('/admin/settings/:key', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM settings WHERE key=?').bind(c.req.param('key')).run(); return c.json({ ok: true }); });
 
 app.get('/rentals', requireAuth, async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(rentals).orderBy(rentals.startDate).limit(limit).offset(offset)); });
-app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate); if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400); const db = drizzle(c.env.DB); for (const item of body.items || []) { const product = await db.select().from(products).where(eq(products.id, item.productId)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get(); if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409); } const id = crypto.randomUUID(); const stamp = now(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, body.customerPhone || null, start.toISOString(), end.toISOString(), body.status || 'HOLD', body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp), ...(body.items || []).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0))]); return c.json({ id }, 201); });
-app.patch('/rentals/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const current = await db.select().from(rentals).where(eq(rentals.id, id)).get(); if (!current) return c.json({ message: 'Rental not found' }, 404); if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận' }, 403); await db.update(rentals).set({ ...body, updatedAt: now() }).where(eq(rentals.id, id)); return c.json({ ok: true }); });
+app.post('/rental-requests', async c => {
+  const body = await c.req.json<any>();
+  const product = await c.env.DB.prepare("SELECT id,title,test_price testPrice,fes_price fesPrice,shoot_price shootPrice,total_quantity totalQuantity FROM products WHERE slug=? AND status!='ARCHIVED'").bind(String(body.productSlug || '')).first<any>();
+  if (!product) return c.json({ message: 'Không tìm thấy sản phẩm.' }, 404);
+  const customerName = String(body.customerName || '').trim(); const customerEmail = String(body.customerEmail || '').trim().toLowerCase(); const customerPhone = String(body.customerPhone || '').trim();
+  const start = new Date(body.startDate); const end = new Date(body.endDate);
+  if (!customerName || !/^\S+@\S+\.\S+$/.test(customerEmail) || !customerPhone || !Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || end <= start) return c.json({ message: 'Vui lòng nhập tên, email, điện thoại và khoảng ngày thuê hợp lệ.' }, 400);
+  const overlap = await c.env.DB.prepare("SELECT coalesce(sum(ri.quantity),0) quantity FROM rental_items ri JOIN rentals r ON r.id=ri.rental_id WHERE ri.product_id=? AND r.status!='CANCELLED' AND r.start_date<? AND r.end_date>?").bind(product.id, end.toISOString(), start.toISOString()).first<{ quantity: number }>();
+  if (Number(overlap?.quantity || 0) >= Number(product.totalQuantity || 1)) return c.json({ message: 'Sản phẩm đã có lịch thuê trùng khoảng ngày này. Hãy chọn ngày khác hoặc nhắn shop.' }, 409);
+  const type = ['test', 'fes', 'shoot'].includes(body.priceType) ? body.priceType : 'fes';
+  const price = Number(product[type === 'test' ? 'testPrice' : type === 'shoot' ? 'shootPrice' : 'fesPrice']) || 0;
+  const id = crypto.randomUUID(); const stamp = now();
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(id, customerName, customerEmail, customerPhone, start.toISOString(), end.toISOString(), 'HOLD', 0, price, String(body.note || '').trim() || null, stamp, stamp),
+    c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, product.id, null, 1, price),
+  ]);
+  return c.json({ id, status: 'HOLD' }, 201);
+});
+app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate); if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400); const db = drizzle(c.env.DB); for (const item of body.items || []) { const product = await db.select().from(products).where(eq(products.id, item.productId)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get(); if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409); } const id = crypto.randomUUID(); const stamp = now(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, String(body.customerEmail || '').trim().toLowerCase() || null, body.customerPhone || null, start.toISOString(), end.toISOString(), body.status || 'HOLD', body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp), ...(body.items || []).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0))]); return c.json({ id }, 201); });
+app.patch('/rentals/:id', requireAuth, async c => {
+  const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB);
+  const current = await db.select().from(rentals).where(eq(rentals.id, id)).get();
+  if (!current) return c.json({ message: 'Không tìm thấy đơn thuê.' }, 404);
+  const status = String(body.status || current.status);
+  if (!['HOLD', 'CONFIRMED', 'CANCELLED', 'RETURNED'].includes(status)) return c.json({ message: 'Trạng thái đơn thuê không hợp lệ.' }, 400);
+  if (current.status === 'RETURNED' && status !== 'RETURNED') return c.json({ message: 'Đơn đã hoàn tất không thể chuyển sang trạng thái khác.' }, 400);
+  if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận.' }, 403);
+  let earnedPoints = 0; const stamp = now();
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare('UPDATE rentals SET status=?,updated_at=? WHERE id=?').bind(status, stamp, id)];
+  if (status === 'RETURNED' && current.status !== 'RETURNED' && current.customerEmail) {
+    const email = current.customerEmail.toLowerCase();
+    let customer = await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE lower(email)=?').bind(email).first<{ id: string }>();
+    if (!customer && /^\S+@\S+\.\S+$/.test(email)) {
+      const customerId = crypto.randomUUID();
+      await c.env.DB.prepare('INSERT INTO customer_accounts (id,email,name,created_at,updated_at) VALUES (?,?,?,?,?)').bind(customerId, email, current.customerName, stamp, stamp).run();
+      customer = { id: customerId };
+    }
+    if (customer) {
+      const [items, settings] = await Promise.all([
+        c.env.DB.prepare('SELECT ri.quantity,ri.price,p.reward_points rewardPoints FROM rental_items ri JOIN products p ON p.id=ri.product_id WHERE ri.rental_id=?').bind(id).all<any>(),
+        c.env.DB.prepare("SELECT key,value FROM settings WHERE key IN ('points_currency_step','points_per_step')").all<{ key: string; value: string }>(),
+      ]);
+      const config = Object.fromEntries(settings.results.map(row => [row.key, Number(row.value)]));
+      const currencyStep = Math.max(1, Number(config.points_currency_step) || 10000);
+      const pointsPerStepValue = config.points_per_step === undefined ? 1 : Number(config.points_per_step);
+      const pointsPerStep = Number.isFinite(pointsPerStepValue) ? Math.max(0, Math.trunc(pointsPerStepValue)) : 1;
+      const customizedItems = items.results.filter(item => Number(item.rewardPoints) > 0);
+      const automaticAmount = items.results.filter(item => Number(item.rewardPoints) <= 0).reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1), 0);
+      const fallbackAmount = automaticAmount || (customizedItems.length === 0 ? Number(current.totalAmount || 0) : 0);
+      earnedPoints = customizedItems.reduce((sum, item) => sum + Number(item.rewardPoints) * Number(item.quantity || 1), 0) + Math.floor(fallbackAmount / currencyStep) * pointsPerStep;
+      if (earnedPoints > 0) statements.push(c.env.DB.prepare("INSERT OR IGNORE INTO loyalty_transactions (id,customer_id,rental_id,source_key,event_type,points_delta,note,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), customer.id, id, `rental:${id}`, 'EARN', earnedPoints, `Tích điểm từ đơn thuê #${id.slice(0, 8)}`, c.get('user').id, stamp));
+    }
+  }
+  if (status === 'CANCELLED' && current.status !== 'CANCELLED') {
+    const redemption = await c.env.DB.prepare("SELECT customer_id,points_delta FROM loyalty_transactions WHERE rental_id=? AND event_type='REDEEM'").bind(id).first<{ customer_id: string; points_delta: number }>();
+    if (redemption) statements.push(c.env.DB.prepare("INSERT OR IGNORE INTO loyalty_transactions (id,customer_id,rental_id,source_key,event_type,points_delta,note,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), redemption.customer_id, id, `refund:${id}`, 'REFUND', Math.abs(Number(redemption.points_delta)), `Hoàn điểm do hủy đơn #${id.slice(0, 8)}`, c.get('user').id, stamp));
+  }
+  await c.env.DB.batch(statements);
+  return c.json({ ok: true, earnedPoints });
+});
 
 app.get('/categories', async c => {
   const result = await c.env.DB.prepare('SELECT c.id, c.name, c.slug, c.parent_id parentId, c.image_url imageUrl, coalesce(c.sort_order, 0) sortOrder, (SELECT COUNT(*) FROM product_categories pc WHERE pc.category_id = c.id) as productCount FROM categories c ORDER BY coalesce(c.sort_order, 0) ASC, c.name ASC').all();

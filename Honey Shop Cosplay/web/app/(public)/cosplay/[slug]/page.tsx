@@ -3,7 +3,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
-import { getProduct } from '../../../../lib/api';
+import { getProduct, getSettings } from '../../../../lib/api';
+import { ProductFeedback } from '../../../../components/ProductFeedback';
+import { RentalRequestForm } from '../../../../components/RentalRequestForm';
+import { PointsRedeemForm } from '../../../../components/PointsRedeemForm';
 
 const money = (n: number) => new Intl.NumberFormat('vi-VN').format(n) + 'đ';
 
@@ -25,7 +28,7 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getProduct(slug);
+  const [product, settings] = await Promise.all([getProduct(slug), getSettings()]);
   if (!product) notFound();
 
   const image =
@@ -44,6 +47,7 @@ export default async function ProductPage({
 
         <div className="mt-7 grid gap-10 lg:grid-cols-2 lg:items-start">
           {/* Cột ảnh sản phẩm vuông vức / sticker */}
+          <div>
           <div className="sticker relative aspect-[4/5] rotate-[-1deg] overflow-hidden border-[3px] border-[#24150e] bg-[#ffe75c] p-3 shadow-[10px_12px_0_#24150e]">
             <div className="relative h-full w-full overflow-hidden bg-white">
               <Image
@@ -54,6 +58,8 @@ export default async function ProductPage({
                 className="object-cover"
               />
             </div>
+          </div>
+          {product.images && product.images.length > 1 && <div className="mt-5 grid grid-cols-4 gap-3">{product.images.map((galleryImage, index) => <div key={`${galleryImage.url}-${index}`} className="relative aspect-square overflow-hidden border-2 border-[#24150e] bg-white shadow-[2px_3px_0_#24150e]"><Image src={galleryImage.url} alt={galleryImage.alt || `${product.title} ảnh ${index + 1}`} fill className="object-cover" /></div>)}</div>}
           </div>
 
           {/* Cột thông tin chi tiết */}
@@ -85,6 +91,11 @@ export default async function ProductPage({
                 </div>
               ))}
             </div>
+            <div className="mt-5 flex flex-wrap gap-2 text-xs font-extrabold text-[#24150e]">
+              <span className="rounded-full border border-[#24150e] bg-white px-3 py-2">{product.rewardPoints ? `Hoàn tất đơn: +${product.rewardPoints} điểm / set` : 'Tích điểm khi đơn hoàn tất'}</span>
+              {settings.points_redemption_enabled !== '0' && product.pointsPrice ? <span className="rounded-full border border-[#24150e] bg-[#ffe75c] px-3 py-2">Giá đổi: {product.pointsPrice.toLocaleString('vi-VN')} điểm</span> : null}
+            </div>
+            <PointsRedeemForm productSlug={product.slug} pointsPrice={settings.points_redemption_enabled === '0' ? 0 : product.pointsPrice || 0} />
 
             {/* Biến thể size */}
             {product.variants?.length ? (
@@ -106,7 +117,7 @@ export default async function ProductPage({
             {/* Hộp lưu ý & Số lượng */}
             <div className="sticker mt-8 bg-[#ffe75c] p-5 text-[#24150e]">
               <b className="block text-base">
-                Còn {product.totalQuantity} set sẵn sàng · {product.location || 'Tại shop TP.HCM'}
+                Còn {product.totalQuantity} set sẵn sàng
               </b>
               <p className="mt-1 text-sm text-[#472f23]">
                 Giá thuê đã bao gồm trang phục và phụ kiện cơ bản đi kèm. Liên hệ shop để giữ lịch chính xác nhé!
@@ -131,8 +142,10 @@ export default async function ProductPage({
                 <span>Xem quy định thuê</span>
               </Link>
             </div>
+            <RentalRequestForm productSlug={product.slug} prices={{ test: product.testPrice, fes: product.fesPrice, shoot: product.shootPrice }} />
           </div>
         </div>
+        <ProductFeedback slug={product.slug} />
       </div>
     </main>
   );

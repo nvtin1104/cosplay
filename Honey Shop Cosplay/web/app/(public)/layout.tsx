@@ -36,6 +36,9 @@ export default async function PublicLayout({ children }: { children: React.React
             <Link href="/blog" className="hover:text-[#ffe75c] transition-colors">
               Chuyện Honey
             </Link>
+            <Link href="/tai-khoan" className="hover:text-[#ffe75c] transition-colors">
+              Tài khoản & lịch thuê
+            </Link>
             <Link href="/admin/login" className="hover:text-[#ffe75c] transition-colors">
               Quản lý
             </Link>

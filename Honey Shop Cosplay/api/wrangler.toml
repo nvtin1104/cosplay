@@ -6,6 +6,7 @@ compatibility_date = "2026-09-19"
 CORS_ORIGIN = "https://honey-shop-web.nvtin1104.workers.dev"
 APP_URL = "https://honey-shop-web.nvtin1104.workers.dev"
 RESEND_FROM = "Honey Shop <noreply@example.com>"
+GOOGLE_CLIENT_ID = ""
 
 [[d1_databases]]
 binding = "DB"

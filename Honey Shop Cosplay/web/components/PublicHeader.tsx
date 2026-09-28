@@ -50,6 +50,7 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
           <Link href="/huong-dan" className="transition-colors hover:text-[#f07d24]">
             Hướng dẫn
           </Link>
+          <Link href="/tai-khoan" className="transition-colors hover:text-[#f07d24]">Tài khoản</Link>
         </nav>
 
         {/* Desktop CTA & Mobile Menu Button - Dạng nút vuông vức */}
@@ -107,6 +108,7 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
                   { href: '/#feedback', label: 'Feedback khách thật 💌' },
                   { href: '/blog', label: 'Chuyện Honey 📖' },
                   { href: '/huong-dan', label: 'Hướng dẫn & Lưu ý 💡' },
+                  { href: '/tai-khoan', label: 'Tài khoản & lịch thuê 👤' },
                 ].map((item) => (
                   <Link
                     key={item.href}
