@@ -2,7 +2,7 @@ import type { Category, Post, PostCategory, Product, ProductTag, SiteSettings } 
 import { getCloudflareApi } from './cloudflare-env';
 
 const isDev = process.env.NODE_ENV === 'development';
-const serverOrigin = process.env.API_ORIGIN || (isDev ? 'http://127.0.0.1:8787' : 'https://honey-shop-api.nvtin1104.workers.dev');
+const serverOrigin = process.env.API_ORIGIN || (isDev ? 'http://127.0.0.1:8787' : 'https://api.honeyshopcosplay.likecactus.com');
 async function request<T>(path: string, fallback: T): Promise<T> {
   try {
     const url = `${serverOrigin}/api/v1${path}`;

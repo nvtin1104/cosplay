@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { getCloudflareApi } from '../../../../lib/cloudflare-env';
 
 export const dynamic = 'force-dynamic';
-const origin = process.env.API_ORIGIN || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8787' : 'https://honey-shop-api.nvtin1104.workers.dev');
+const origin = process.env.API_ORIGIN || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8787' : 'https://api.honeyshopcosplay.likecactus.com');
 
 async function proxy(request: NextRequest) {
   const incoming = new URL(request.url);
