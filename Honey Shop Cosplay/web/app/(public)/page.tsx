@@ -121,7 +121,7 @@ export default async function HomePage() {
             <div className="mt-10 grid gap-8 md:grid-cols-3">
               {products.slice(0, 3).map((p, i) => (
                 <Reveal key={p.id}>
-                  <ProductCard product={p} index={i} />
+                  <ProductCard product={p} index={i} redeemEnabled={settings.points_redemption_enabled !== '0'} />
                 </Reveal>
               ))}
             </div>
@@ -135,7 +135,7 @@ export default async function HomePage() {
           )}
           {pinnedGroups.filter(group => group && group.products.length).map(group => group && <div key={group.tag.id} className="mt-16">
             <div className="flex items-end justify-between gap-4"><h3 className="display text-4xl font-extrabold text-[#24150e]">{group.tag.name}</h3><Link href={`/cosplay?tag=${encodeURIComponent(group.tag.slug)}`} className="font-bold underline">Xem tất cả →</Link></div>
-            <div className="mt-7 grid gap-8 md:grid-cols-3">{group.products.map((product, i) => <ProductCard key={product.id} product={product} index={i} />)}</div>
+            <div className="mt-7 grid gap-8 md:grid-cols-3">{group.products.map((product, i) => <ProductCard key={product.id} product={product} index={i} redeemEnabled={settings.points_redemption_enabled !== '0'} />)}</div>
           </div>)}
         </div>
       </section>

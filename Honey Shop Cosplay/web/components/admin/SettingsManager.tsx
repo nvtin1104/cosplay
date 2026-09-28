@@ -8,7 +8,8 @@ const fields: [keyof SiteSettings, string][] = [
   ['site_name', 'Tên site'], ['logo_url', 'Logo URL'], ['contact_phone', 'Số điện thoại'],
   ['contact_email', 'Email'], ['contact_address', 'Địa chỉ'], ['contact_facebook', 'Facebook'], ['contact_zalo', 'Zalo'],
 ];
-const known = new Set([...fields.map(([key]) => key), 'pinned_tag_ids']);
+const pointKeys = ['points_currency_step', 'points_per_step', 'points_value_vnd', 'points_redemption_enabled'];
+const known = new Set([...fields.map(([key]) => key), 'pinned_tag_ids', ...pointKeys]);
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, { credentials: 'include', ...init });
   const data = await response.json();
@@ -42,6 +43,11 @@ export function SettingsManager() {
     try { await Promise.all([...fields.map(([name]) => put(name, values[name] || '')), put('pinned_tag_ids', JSON.stringify(pinned))]); setMessage('Đã lưu cài đặt.'); await load(); }
     catch (e) { setMessage((e as Error).message); }
   }
+  async function savePoints(event: FormEvent) {
+    event.preventDefault();
+    try { await Promise.all(pointKeys.map(name => put(name, values[name] || (name === 'points_redemption_enabled' ? '1' : '0')))); setMessage('Đã lưu quy tắc điểm.'); await load(); }
+    catch (e) { setMessage((e as Error).message); }
+  }
   async function add(event: FormEvent) {
     event.preventDefault();
     try { await put(key, value); setKey(''); setValue(''); setMessage('Đã lưu key.'); await load(); }
@@ -70,6 +76,9 @@ export function SettingsManager() {
       <AdminButton className="py-3">Lưu cài đặt</AdminButton>
       {message && <p role="status" className="text-sm text-amber-700">{message}</p>}
     </form>
-    <AdminCard className="self-start p-6"><h2 className="text-lg font-bold">Config key/value</h2><p className="mt-1 text-xs text-neutral-500">Các key tùy chỉnh chỉ xem được trong admin; không đưa lên API công khai.</p><form onSubmit={add} className="mt-4 grid gap-2"><AdminInput placeholder="key_name" value={key} onChange={e => setKey(e.target.value)} required /><AdminTextarea placeholder="Value" value={value} onChange={e => setValue(e.target.value)} /><AdminButton className="py-2">Lưu key</AdminButton></form><div className="mt-5 space-y-2">{rows.filter(row => !known.has(row.key)).map(row => <div key={row.key} className="rounded border p-3 text-sm"><div className="flex justify-between"><b>{row.key}</b><AdminButton type="button" variant="danger" className="px-2 py-1 text-xs" onClick={() => remove(row.key)}>Xóa</AdminButton></div><p className="mt-1 break-all text-neutral-500">{row.value}</p><AdminButton type="button" variant="ghost" className="mt-2 px-2 py-1 text-xs" onClick={() => { setKey(row.key); setValue(row.value); }}>Sửa</AdminButton></div>)}</div></AdminCard>
+    <div className="grid gap-6 self-start">
+      <AdminCard className="p-6"><h2 className="text-lg font-bold">Quy tắc điểm thành viên</h2><p className="mt-1 text-xs leading-5 text-neutral-500">Điểm mặc định được tính theo chi tiêu đơn thuê. Sản phẩm có điểm thưởng riêng sẽ dùng mức sản phẩm đó.</p><form onSubmit={savePoints} className="mt-4 grid gap-4 sm:grid-cols-2"><AdminField label="Mỗi mức chi tiêu (VNĐ)" htmlFor="points-currency-step"><AdminInput id="points-currency-step" type="number" min="1" value={values.points_currency_step ?? '10000'} onChange={e => setValues(prev => ({ ...prev, points_currency_step: e.target.value }))} /></AdminField><AdminField label="Điểm cộng mỗi mức" htmlFor="points-per-step"><AdminInput id="points-per-step" type="number" min="0" value={values.points_per_step ?? '1'} onChange={e => setValues(prev => ({ ...prev, points_per_step: e.target.value }))} /></AdminField><AdminField label="Giá trị quy đổi một điểm (VNĐ)" htmlFor="points-value-vnd"><AdminInput id="points-value-vnd" type="number" min="0" value={values.points_value_vnd ?? '1000'} onChange={e => setValues(prev => ({ ...prev, points_value_vnd: e.target.value }))} /></AdminField><label className="flex items-center gap-2 self-end pb-3 text-sm font-semibold"><input type="checkbox" checked={(values.points_redemption_enabled ?? '1') !== '0'} onChange={e => setValues(prev => ({ ...prev, points_redemption_enabled: e.target.checked ? '1' : '0' }))} className="h-4 w-4" />Cho phép đổi điểm</label><div className="sm:col-span-2"><AdminButton>Lưu quy tắc điểm</AdminButton></div></form></AdminCard>
+      <AdminCard className="p-6"><h2 className="text-lg font-bold">Config key/value</h2><p className="mt-1 text-xs text-neutral-500">Các key tùy chỉnh chỉ xem được trong admin; không đưa lên API công khai.</p><form onSubmit={add} className="mt-4 grid gap-2"><AdminInput placeholder="key_name" value={key} onChange={e => setKey(e.target.value)} required /><AdminTextarea placeholder="Value" value={value} onChange={e => setValue(e.target.value)} /><AdminButton className="py-2">Lưu key</AdminButton></form><div className="mt-5 space-y-2">{rows.filter(row => !known.has(row.key)).map(row => <div key={row.key} className="rounded border p-3 text-sm"><div className="flex justify-between"><b>{row.key}</b><AdminButton type="button" variant="danger" className="px-2 py-1 text-xs" onClick={() => remove(row.key)}>Xóa</AdminButton></div><p className="mt-1 break-all text-neutral-500">{row.value}</p><AdminButton type="button" variant="ghost" className="mt-2 px-2 py-1 text-xs" onClick={() => { setKey(row.key); setValue(row.value); }}>Sửa</AdminButton></div>)}</div></AdminCard>
+    </div>
   </div>;
 }

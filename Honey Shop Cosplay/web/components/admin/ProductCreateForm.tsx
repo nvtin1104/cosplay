@@ -38,7 +38,7 @@ const STATUS_TABS = [
   { value: 'ARCHIVED', label: 'Lưu trữ' },
 ] as const;
 
-type Category = { id: string; name: string; slug: string; parentId: string | null };
+type Category = { id: string; name: string; slug: string; parentId: string | null; imageUrl?: string | null };
 type TagItem = { id: string; name: string; slug: string };
 type SimpleProduct = { id: string; title: string; thumbnailUrl?: string; isCombo?: boolean; testPrice: number };
 
@@ -46,7 +46,9 @@ type EditableProduct = {
   id: string; title: string; slug: string; description?: string;
   testPrice: number; fesPrice: number; shootPrice: number; totalQuantity: number;
   status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'; isCombo?: boolean;
+  rewardPoints?: number; pointsPrice?: number;
   thumbnailUrl?: string;
+  images?: { url: string; alt?: string }[];
   categories?: Category[]; tags?: TagItem[]; comboItems?: { productId: string; quantity: number }[];
 };
 
@@ -76,14 +78,15 @@ function CategoryTree({
     <div className={depth > 0 ? 'ml-4 border-l border-neutral-100 pl-3' : ''}>
       {children.map((cat) => (
         <div key={cat.id}>
-          <label className="flex items-center gap-2 py-1 text-sm">
+          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl px-2 py-1 text-sm transition hover:bg-amber-50">
             <input
               type="checkbox"
               checked={selected.includes(cat.id)}
               onChange={() => onToggle(cat.id)}
-              className="h-4 w-4 rounded border-neutral-300 text-black focus:ring-black"
+              className="h-4 w-4 shrink-0 rounded border-neutral-300 text-black focus:ring-black"
             />
-            {cat.name}
+            {cat.imageUrl ? <img src={cat.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-neutral-200 object-cover" /> : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 text-xs font-black text-amber-800">{cat.name.slice(0, 1)}</span>}
+            <span className="min-w-0 flex-1 truncate font-medium">{cat.name}</span>
           </label>
           <CategoryTree categories={categories} selected={selected} onToggle={onToggle} parentId={cat.id} depth={depth + 1} />
         </div>
@@ -105,9 +108,12 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   const [testPrice, setTestPrice] = useState<number | string>(product?.testPrice ?? 120000);
   const [fesPrice, setFesPrice] = useState<number | string>(product?.fesPrice ?? 250000);
   const [shootPrice, setShootPrice] = useState<number | string>(product?.shootPrice ?? 180000);
+  const [rewardPoints, setRewardPoints] = useState<number | string>(product?.rewardPoints ?? 0);
+  const [pointsPrice, setPointsPrice] = useState<number | string>(product?.pointsPrice ?? 0);
   const [status, setStatus] = useState<'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'>(product?.status || 'AVAILABLE');
   const [isCombo, setIsCombo] = useState(!!product?.isCombo);
   const [thumbnailUrl, setThumbnailUrl] = useState(product?.thumbnailUrl || '');
+  const [imageUrls, setImageUrls] = useState<string[]>(product?.images?.map((image) => image.url) || []);
   const [uploading, setUploading] = useState(false);
 
   // Taxonomy states
@@ -211,6 +217,7 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Tải ảnh lên thất bại.');
       setThumbnailUrl(data.url);
+      setImageUrls((previous) => previous.includes(data.url) ? previous : [...previous, data.url]);
     } catch (e: any) {
       setError(e.message || 'Tải ảnh lên thất bại.');
     } finally {
@@ -244,10 +251,13 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
             testPrice: Number(testPrice) || 0,
             fesPrice: Number(fesPrice) || 0,
             shootPrice: Number(shootPrice) || 0,
+            rewardPoints: Number(rewardPoints) || 0,
+            pointsPrice: Number(pointsPrice) || 0,
             totalQuantity: product?.totalQuantity ?? 1,
             status,
             isCombo,
             thumbnailUrl: thumbnailUrl.trim(),
+            imageUrls,
             categoryIds: selectedCategoryIds,
             tagIds: selectedTagIds,
             comboItems: isCombo ? comboItems : [],
@@ -406,7 +416,7 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                                 min={1}
                                 value={picked.quantity}
                                 onChange={(e) => setComboQuantity(p.id, Number(e.target.value) || 1)}
-                                className="w-16 py-1 text-xs"
+                                className="h-9 !min-h-0 w-16 py-1 text-xs"
                               />
                             )}
                           </div>
@@ -443,6 +453,15 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                   <p className="mt-1 text-xs font-medium text-emerald-600">{formatVnd(value)}</p>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="admin-card p-6">
+            <h2 className="text-base font-bold">Điểm thành viên</h2>
+            <p className="mt-1 text-xs leading-5 text-neutral-500">Điểm thưởng được cộng khi đơn thuê hoàn tất. Giá điểm là số điểm cần để đổi sản phẩm.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div><label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">Điểm thưởng / sản phẩm</label><AdminInput type="number" min="0" step="1" value={rewardPoints} onChange={e => setRewardPoints(e.target.value)} className="mt-1 font-semibold" /><p className="mt-1 text-xs text-neutral-500">0 = tự tính từ giá thuê theo cài đặt chung.</p></div>
+              <div><label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">Giá đổi bằng điểm</label><AdminInput type="number" min="0" step="1" value={pointsPrice} onChange={e => setPointsPrice(e.target.value)} className="mt-1 font-semibold" /><p className="mt-1 text-xs text-neutral-500">Để 0 nếu sản phẩm không áp dụng đổi điểm.</p></div>
             </div>
           </div>
 
@@ -585,6 +604,14 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mt-5 border-t border-neutral-100 pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div><h4 className="text-sm font-bold text-neutral-800">Danh sách ảnh</h4><p className="mt-1 text-xs text-neutral-500">Ảnh bổ sung sẽ hiển thị trong chi tiết sản phẩm.</p></div>
+                <label className="shrink-0 cursor-pointer rounded-lg border border-neutral-200 px-3 py-2 text-xs font-bold hover:border-amber-400 hover:bg-amber-50">+ Thêm ảnh<input type="file" accept="image/*" multiple className="sr-only" disabled={uploading} onChange={async (e) => { const input = e.currentTarget; const files = Array.from(input.files || []); for (const file of files) await handleFileUpload(file); input.value = ''; }} /></label>
+              </div>
+              {imageUrls.length ? <div className="mt-3 grid grid-cols-3 gap-2">{imageUrls.map((url, index) => <div key={`${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"><img src={url} alt={`Ảnh sản phẩm ${index + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setImageUrls((previous) => previous.filter((_, imageIndex) => imageIndex !== index))} aria-label={`Xóa ảnh ${index + 1}`} className="absolute right-1 top-1 rounded-full bg-black/75 p-1.5 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"><span className="sr-only">Xóa ảnh</span>×</button></div>)}</div> : <p className="mt-3 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-500">Chưa có ảnh bổ sung.</p>}
             </div>
           </div>
 

@@ -4,7 +4,7 @@ import type { Product } from '../lib/types';
 
 const money = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + 'đ';
 
-export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
+export function ProductCard({ product, index = 0, redeemEnabled = true }: { product: Product; index?: number; redeemEnabled?: boolean }) {
   const image =
     product.thumbnailUrl ||
     product.images?.[0]?.url ||
@@ -32,6 +32,10 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
           >
             {product.status === 'AVAILABLE' ? 'CÓ SẴN' : 'KIỂM TRA LỊCH'}
           </span>
+          <div className="absolute inset-x-3 bottom-3 flex flex-wrap gap-1.5">
+            {[["TEST", product.testPrice], ["FES", product.fesPrice], ["SHOOT", product.shootPrice]].map(([label, price]) => <span key={String(label)} className="border border-[#24150e] bg-white/95 px-2 py-1 text-[10px] font-extrabold text-[#24150e] shadow-[2px_2px_0_#24150e] sm:text-xs">{label} · {money(Number(price))}</span>)}
+            {redeemEnabled && product.pointsPrice ? <span className="border border-[#24150e] bg-[#ffe75c] px-2 py-1 text-[10px] font-extrabold text-[#24150e] shadow-[2px_2px_0_#24150e] sm:text-xs">ĐỔI · {product.pointsPrice.toLocaleString('vi-VN')} điểm</span> : null}
+          </div>
         </div>
         <div className="p-5">
           <h3 className="display text-2xl font-extrabold leading-tight text-[#24150e]">
