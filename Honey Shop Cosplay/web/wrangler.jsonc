@@ -8,5 +8,8 @@
     "directory": "dist/client",
     "not_found_handling": "none",
     "binding": "ASSETS"
-  }
+  },
+  "services": [
+    { "binding": "API", "service": "honey-shop-api" }
+  ]
 }

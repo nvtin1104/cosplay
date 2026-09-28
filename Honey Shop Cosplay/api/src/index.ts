@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import sanitizeHtml from 'sanitize-html';
 import { products, productImages, productVariants, posts, rentals, rentalItems, postCategories } from './db/schema';
-import { AppEnv, AppVariables, hashPassword, randomToken, requireAdmin, requireAuth, SESSION_COOKIE, sha256, validOrigin, verifyPassword } from './auth';
+import { AppEnv, AppVariables, hashPassword, randomToken, requireAdmin, requireAuth, SESSION_COOKIE, sha256, supportsPasswordHash, validOrigin, verifyPassword } from './auth';
 
 const app = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>();
 const now = () => new Date().toISOString();
@@ -181,7 +181,7 @@ app.post('/auth/login', async c => {
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE email=? AND active=1').bind(email).first<any>();
   const valid = user && await verifyPassword(body.password, user.password_salt, user.password_hash);
   await c.env.DB.prepare('INSERT INTO login_attempts (id,email,ip_hash,successful,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(), email, ipHash, valid ? 1 : 0, now()).run();
-  if (!valid) return c.json({ message: 'Email hoặc mật khẩu không đúng' }, 401);
+  if (!valid) return c.json({ message: user && !supportsPasswordHash(user.password_hash) ? 'Tài khoản cần đặt lại mật khẩu để hoàn tất cập nhật bảo mật.' : 'Email hoặc mật khẩu không đúng' }, user && !supportsPasswordHash(user.password_hash) ? 409 : 401);
   const token = randomToken(); const expiresAt = plusHours(24 * 7);
   await c.env.DB.prepare('INSERT INTO sessions (id,user_id,token_hash,expires_at,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(), user.id, await sha256(token), expiresAt, now()).run();
   setCookie(c, SESSION_COOKIE, token, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Lax', path: '/', maxAge: 604800 });

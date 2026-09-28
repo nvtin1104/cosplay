@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { getCloudflareApi } from '../../../../lib/cloudflare-env';
 
 export const dynamic = 'force-dynamic';
 const origin = process.env.API_ORIGIN || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8787' : 'https://honey-shop-api.nvtin1104.workers.dev');
@@ -10,7 +11,7 @@ async function proxy(request: NextRequest) {
   headers.delete('host');
   headers.delete('content-length');
   headers.delete('connection');
-  const response = await fetch(target, {
+  const init: RequestInit = {
     method: request.method,
     headers,
     body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
@@ -18,7 +19,11 @@ async function proxy(request: NextRequest) {
     duplex: 'half',
     redirect: 'manual',
     cache: 'no-store',
-  });
+  };
+  const api = await getCloudflareApi();
+  const response = api
+    ? await api.fetch(new Request(target, init))
+    : await fetch(target, init);
   return new Response(response.body, { status: response.status, headers: response.headers });
 }
 export const GET = proxy;
