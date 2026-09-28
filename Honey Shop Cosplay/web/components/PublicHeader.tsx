@@ -3,24 +3,25 @@
 import Link from 'next/link';
 import { ArrowUpRight, Menu, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: string; logoUrl?: string }) {
   const [open, setOpen] = useState(false);
 
   // Prevent background scroll when mobile menu is open
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
     };
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-50 border-b-2 border-[#24150e] bg-[#fff6dc]/95 backdrop-blur-md">
+    <>
+      <header className="sticky top-0 z-50 border-b-2 border-[#24150e] bg-[#fff6dc]/95 backdrop-blur-md">
       <div className="header-shell flex h-[74px] md:h-[84px] items-center justify-between gap-4">
         {/* Logo sticker vuông vức theo style badge */}
         <Link href="/" className="flex items-center shrink-0">
@@ -67,6 +68,8 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
           <button
             type="button"
             aria-label={open ? 'Đóng menu' : 'Mở menu'}
+            aria-expanded={open}
+            aria-controls="mobile-navigation"
             onClick={() => setOpen(!open)}
             className="flex md:hidden items-center justify-center h-10 w-10 border-2 border-[#24150e] bg-white text-[#24150e] shadow-[3px_4px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5"
           >
@@ -75,19 +78,20 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
         </div>
       </div>
 
-      {/* Mobile Floating Collapse Menu (Nổi riêng biệt) */}
-      {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          {/* Backdrop mờ che nền */}
-          <div
-            className="fixed inset-0 bg-[#24150e]/50 backdrop-blur-xs transition-opacity"
+      </header>
+
+      {/* Keep the fixed mobile menu outside the sticky, filtered header. */}
+      {open && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#24150e]/50 backdrop-blur-xs transition-opacity"
             onClick={() => setOpen(false)}
-            aria-hidden="true"
+            aria-label="Đóng menu"
           />
 
-          {/* Card nổi riêng biệt */}
-          <div className="fixed top-[84px] left-4 right-4 z-50 mx-auto max-w-sm">
-            <nav className="sticker cut-card overflow-hidden bg-[#fff6dc] p-6 border-2 border-[#24150e] shadow-[8px_10px_0_#24150e] animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute inset-x-4 top-[calc(env(safe-area-inset-top)+5.25rem)] mx-auto max-h-[calc(100dvh-6.25rem)] max-w-sm overflow-y-auto overscroll-contain">
+            <nav id="mobile-navigation" role="dialog" aria-modal="true" aria-label="Menu Honey Shop" className="sticker border-2 border-[#24150e] bg-[#fff6dc] p-5 shadow-[8px_10px_0_#24150e] animate-in fade-in zoom-in-95 duration-200 sm:p-6">
               <div className="flex items-center justify-between border-b-2 border-[#24150e] pb-3 mb-4">
                 <span className="display text-lg font-extrabold text-[#24150e] flex items-center gap-2">
                   <span>🍯</span> Menu Honey Shop
@@ -134,8 +138,9 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
               </div>
             </nav>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
-    </header>
+    </>
   );
 }
