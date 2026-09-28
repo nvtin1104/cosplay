@@ -111,19 +111,21 @@ button {
   z-index: -1;
 }
 
-.admin-input {
-  width: 100%;
-  border: 1px solid #d8d8d8;
-  border-radius: 10px;
-  background: #fff;
-  padding: 11px 13px;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
+@layer components {
+  .admin-input {
+    width: 100%;
+    border: 1px solid #d8d8d8;
+    border-radius: 10px;
+    background: #fff;
+    padding: 11px 13px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
 
-.admin-input:focus {
-  border-color: #111;
-  box-shadow: 0 0 0 3px #00000010;
+  .admin-input:focus {
+    border-color: #111;
+    box-shadow: 0 0 0 3px #00000010;
+  }
 }
 
 .admin-card {

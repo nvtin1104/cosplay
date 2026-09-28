@@ -17,11 +17,11 @@ export function AdminButton({ variant = 'primary', className = '', ...props }: B
 }
 
 export function AdminInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={`admin-input ${className}`} />;
+  return <input {...props} className={`admin-input min-h-12 ${className}`} />;
 }
 
 export function AdminTextarea({ className = '', ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={`admin-input ${className}`} />;
+  return <textarea {...props} className={`admin-input block w-full resize-y ${className}`} />;
 }
 
 export function AdminField({ label, htmlFor, hint, children, className = '', labelClassName = '' }: {
