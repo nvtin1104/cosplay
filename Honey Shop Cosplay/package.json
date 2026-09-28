@@ -10,8 +10,8 @@
     "lint": "pnpm --filter honey-shop-api lint && pnpm --filter honey-shop-web lint",
     "db:migrate:local": "pnpm --filter honey-shop-api db:migrate:local",
     "db:seed:local": "pnpm --filter honey-shop-api db:seed:local",
-    "deploy:api": "pnpm --filter honey-shop-api deploy",
-    "deploy:web": "pnpm --filter honey-shop-web deploy"
+    "deploy:api": "pnpm --filter honey-shop-api run deploy",
+    "deploy:web": "pnpm --filter honey-shop-web run deploy"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

@@ -5,9 +5,9 @@
     "dev": "next dev -p 3000",
     "dev:cloudflare": "vinext dev",
     "build": "next build",
-    "build:cloudflare": "vinext build",
+    "build:cloudflare": "node scripts/cloudflare.mjs build",
     "preview": "vinext start",
-    "deploy": "vinext-cloudflare deploy",
+    "deploy": "node scripts/cloudflare.mjs deploy",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
