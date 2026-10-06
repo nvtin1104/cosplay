@@ -35,8 +35,10 @@ Cấu hình tài khoản Cloudflare và `NEXT_PUBLIC_SITE_URL` theo domain web t
 
 ### Tài khoản khách và Google Sign-In
 
-Tài khoản khách dùng bảng `customer_accounts` riêng với tài khoản nhân sự. Khách có thể đăng ký bằng email/mật khẩu, lưu link Facebook, gửi yêu cầu thuê từ trang sản phẩm và xem lịch sử thuê theo email. Mỗi yêu cầu mới gắn với email khách nhập; để yêu cầu cũ hiện trong tài khoản, email phải trùng khớp.
+Tài khoản khách dùng bảng `customer_accounts` riêng với tài khoản nhân sự. Khách chỉ đăng nhập bằng Google; hồ sơ được tạo tự động ở lần đăng nhập đầu tiên, không có đăng ký/mật khẩu riêng. Khách có thể lưu link Facebook, gửi yêu cầu thuê từ trang sản phẩm và xem lịch sử thuê theo email. Mỗi yêu cầu mới gắn với email khách nhập; để yêu cầu cũ hiện trong tài khoản, email phải trùng khớp.
 
-Để bật Google Sign-In, tạo OAuth 2.0 Web Client trong Google Cloud Console và khai báo domain web trong Authorized JavaScript origins. Đặt cùng Client ID ở biến build web `NEXT_PUBLIC_GOOGLE_CLIENT_ID` và biến Worker API `GOOGLE_CLIENT_ID`. Nếu không cấu hình Client ID, đăng ký và đăng nhập bằng email vẫn hoạt động.
+Để bật Google Sign-In local, tạo OAuth 2.0 Web Client trong Google Cloud Console, thêm `http://localhost:3000` vào Authorized JavaScript origins, rồi đặt cùng Client ID vào `web/.env.local` (`NEXT_PUBLIC_GOOGLE_CLIENT_ID=...`) và `api/.dev.vars` (`GOOGLE_CLIENT_ID=...`). Có file mẫu `web/.env.example` và `api/.dev.vars.example`. Khởi động lại web và API sau khi cấu hình. Nếu thiếu Client ID, nút đăng nhập sẽ thông báo chưa cấu hình; đăng nhập khách không khả dụng cho tới khi thêm Client ID hợp lệ.
+
+Chính sách quyền riêng tư được công bố tại `/quyen-rieng-tu`. Nội dung này mô tả cách xử lý dữ liệu và chức năng đang có, không tự quyết định website thuộc hoặc không thuộc một loại hình pháp lý nào.
 
 Điểm thành viên mặc định cộng 1 điểm cho mỗi 10.000đ tiền thuê, có thể chỉnh tỷ lệ và giá trị quy đổi tại Cài đặt site. Mỗi sản phẩm có thể đặt điểm thưởng riêng (ghi đè cách tính mặc định) và giá điểm để đổi sản phẩm. Điểm thưởng chỉ được ghi vào sổ giao dịch một lần khi đơn chuyển sang `RETURNED`; yêu cầu đổi điểm bị hủy sẽ được hoàn điểm.

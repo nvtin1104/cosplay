@@ -29,30 +29,10 @@ app.use('*', async (c, next) => { if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req
 app.get('/health', c => c.json({ ok: true, service: 'honey-shop-api-worker', runtime: 'cloudflare-workers', timestamp: now() }));
 
 app.post('/customers/register', async c => {
-  const body = await c.req.json<any>();
-  const email = String(body.email || '').trim().toLowerCase();
-  const name = String(body.name || '').trim();
-  const password = String(body.password || '');
-  if (!/^\S+@\S+\.\S+$/.test(email) || !name || password.length < 10) return c.json({ message: 'Nhập tên, email hợp lệ và mật khẩu từ 10 ký tự.' }, 400);
-  if (await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE email=?').bind(email).first()) return c.json({ message: 'Email này đã có tài khoản. Hãy đăng nhập.' }, 409);
-  const pass = await hashPassword(password);
-  const id = crypto.randomUUID();
-  await c.env.DB.prepare('INSERT INTO customer_accounts (id,email,name,password_hash,password_salt,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').bind(id, email, name, pass.hash, pass.salt, now(), now()).run();
-  await createCustomerSession(c, id);
-  return c.json({ user: { id, email, name, facebookUrl: null } }, 201);
+  return c.json({ message: 'Honey chỉ hỗ trợ đăng nhập bằng Google. Hãy tiếp tục bằng Google để tạo hồ sơ khách lần đầu.' }, 410);
 });
 app.post('/customers/login', async c => {
-  const body = await c.req.json<any>();
-  const email = String(body.email || '').trim().toLowerCase();
-  const ipHash = await sha256(c.req.header('CF-Connecting-IP') || 'local'); const since = new Date(Date.now() - 15 * 60000).toISOString();
-  const failed = await c.env.DB.prepare('SELECT count(*) count FROM login_attempts WHERE email=? AND ip_hash=? AND successful=0 AND created_at>?').bind(email, ipHash, since).first<{ count: number }>();
-  if (Number(failed?.count || 0) >= 8) return c.json({ message: 'Đăng nhập tạm khóa. Vui lòng thử lại sau 15 phút.' }, 429);
-  const customer = await c.env.DB.prepare('SELECT * FROM customer_accounts WHERE email=?').bind(email).first<any>();
-  const valid = !!customer?.active && !!customer?.password_hash && await verifyPassword(String(body.password || ''), customer.password_salt, customer.password_hash);
-  await c.env.DB.prepare('INSERT INTO login_attempts (id,email,ip_hash,successful,created_at) VALUES (?,?,?,?,?)').bind(crypto.randomUUID(), email, ipHash, valid ? 1 : 0, now()).run();
-  if (!valid) return c.json({ message: 'Email hoặc mật khẩu không đúng.' }, 401);
-  await createCustomerSession(c, customer.id);
-  return c.json({ user: { id: customer.id, email: customer.email, name: customer.name, facebookUrl: customer.facebook_url } });
+  return c.json({ message: 'Honey chỉ hỗ trợ đăng nhập bằng Google.' }, 410);
 });
 app.post('/customers/google', async c => {
   if (!c.env.GOOGLE_CLIENT_ID) return c.json({ message: 'Chưa cấu hình Google Client ID cho hệ thống.' }, 503);

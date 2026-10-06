@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [{ source: '/tai-khoan', destination: '/', permanent: false }];
+  },
 };
 
 export default nextConfig;

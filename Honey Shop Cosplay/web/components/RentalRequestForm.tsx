@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import Link from 'next/link';
 
 type PriceKey = 'test' | 'fes' | 'shoot';
 export function RentalRequestForm({ productSlug, prices }: { productSlug: string; prices: Record<PriceKey, number> }) {
@@ -17,7 +16,7 @@ export function RentalRequestForm({ productSlug, prices }: { productSlug: string
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Không thể gửi yêu cầu thuê.'); }
     finally { setBusy(false); }
   }
-  return <details className="mt-5 rounded-2xl border-2 border-[#24150e] bg-white p-5 shadow-[4px_5px_0_#24150e]"><summary className="cursor-pointer list-none font-extrabold text-[#24150e] [&::-webkit-details-marker]:hidden">Đăng ký thuê sản phẩm này <span className="float-right text-[#b4570a]">＋</span></summary>{success ? <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-[#624b40]">{notice} Dùng email vừa nhập tại <Link href="/tai-khoan" className="font-bold underline">Tài khoản khách</Link> để theo dõi lịch sử thuê.{/* Close summary keeps confirmation visible. */}</div> : <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2">
+  return <details className="mt-5 rounded-2xl border-2 border-[#24150e] bg-white p-5 shadow-[4px_5px_0_#24150e]"><summary className="cursor-pointer list-none font-extrabold text-[#24150e] [&::-webkit-details-marker]:hidden">Đăng ký thuê sản phẩm này <span className="float-right text-[#b4570a]">＋</span></summary>{success ? <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-[#624b40]">{notice} Honey sẽ liên hệ bạn theo thông tin đã gửi.{/* Close summary keeps confirmation visible. */}</div> : <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2">
     <label className="grid gap-1 text-xs font-bold">Tên<input name="name" required maxLength={100} className="min-h-11 rounded-lg border border-neutral-300 px-3 text-sm font-normal" /></label>
     <label className="grid gap-1 text-xs font-bold">Số điện thoại<input name="phone" required maxLength={32} className="min-h-11 rounded-lg border border-neutral-300 px-3 text-sm font-normal" /></label>
     <label className="grid gap-1 text-xs font-bold sm:col-span-2">Email tài khoản<input name="email" type="email" required maxLength={160} className="min-h-11 rounded-lg border border-neutral-300 px-3 text-sm font-normal" /><span className="font-normal text-neutral-500">Dùng email này để xem lịch sử thuê trong tài khoản.</span></label>

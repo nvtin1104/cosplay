@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { ArrowUpRight, Menu, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { GoogleLoginModal } from './GoogleLoginModal';
 
 export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: string; logoUrl?: string }) {
   const [open, setOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   // Prevent background scroll when mobile menu is open
   useEffect(() => {
@@ -22,7 +24,7 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
   return (
     <>
       <header className="sticky top-0 z-50 border-b-2 border-[#24150e] bg-[#fff6dc]/95 backdrop-blur-md">
-      <div className="header-shell flex h-[74px] md:h-[84px] items-center justify-between gap-4">
+      <div className="mx-auto flex h-[74px] max-w-[1440px] items-center justify-between gap-4 px-4 md:h-[84px] md:px-8">
         {/* Logo sticker vuông vức theo style badge */}
         <Link href="/" className="flex items-center shrink-0">
           <div className="inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-3.5 sm:px-4 py-1.5 sm:py-2 text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]">
@@ -51,18 +53,13 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
           <Link href="/huong-dan" className="transition-colors hover:text-[#f07d24]">
             Hướng dẫn
           </Link>
-          <Link href="/tai-khoan" className="transition-colors hover:text-[#f07d24]">Tài khoản</Link>
         </nav>
 
         {/* Desktop CTA & Mobile Menu Button - Dạng nút vuông vức */}
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            href="/cosplay"
-            className="hidden md:inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-5 py-2.5 text-sm font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]"
-          >
-            <Sparkles size={16} />
-            <span>Chọn nhân vật</span>
-          </Link>
+          <button type="button" onClick={() => setLoginOpen(true)} className="hidden md:inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-5 py-2.5 text-sm font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]">
+            <Sparkles size={16} /><span>Đăng nhập</span>
+          </button>
 
           {/* Mobile hamburger button dạng vuông */}
           <button
@@ -112,7 +109,6 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
                   { href: '/#feedback', label: 'Feedback khách thật 💌' },
                   { href: '/blog', label: 'Chuyện Honey 📖' },
                   { href: '/huong-dan', label: 'Hướng dẫn & Lưu ý 💡' },
-                  { href: '/tai-khoan', label: 'Tài khoản & lịch thuê 👤' },
                 ].map((item) => (
                   <Link
                     key={item.href}
@@ -127,20 +123,16 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
               </div>
 
               <div className="mt-5 pt-4 border-t-2 border-[#24150e]">
-                <Link
-                  onClick={() => setOpen(false)}
-                  href="/cosplay"
-                  className="flex items-center justify-center gap-2 border-2 border-[#24150e] bg-[#ff9b35] py-3.5 text-center text-base font-extrabold text-white shadow-[4px_5px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5"
-                >
-                  <Sparkles size={18} />
-                  <span>Chọn nhân vật ngay</span>
-                </Link>
+                <button type="button" onClick={() => { setOpen(false); setLoginOpen(true); }} className="flex w-full items-center justify-center gap-2 border-2 border-[#24150e] bg-[#ff9b35] py-3.5 text-center text-base font-extrabold text-white shadow-[4px_5px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5">
+                  <Sparkles size={18} /><span>Đăng nhập</span>
+                </button>
               </div>
             </nav>
           </div>
         </div>,
         document.body,
       )}
+      <GoogleLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
   );
 }

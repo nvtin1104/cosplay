@@ -8,7 +8,7 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <>
       <PublicHeader siteName={siteName} logoUrl={settings.logo_url} />
-      {children}
+      <main className="mx-auto w-full max-w-[1440px]">{children}</main>
       <footer className="border-t-2 border-[#24150e] bg-[#24150e] py-12 text-[#fff6dc]">
         <div className="header-shell grid gap-8 md:grid-cols-[1.2fr_.8fr]">
           <div>
@@ -36,8 +36,8 @@ export default async function PublicLayout({ children }: { children: React.React
             <Link href="/blog" className="hover:text-[#ffe75c] transition-colors">
               Chuyện Honey
             </Link>
-            <Link href="/tai-khoan" className="hover:text-[#ffe75c] transition-colors">
-              Tài khoản & lịch thuê
+            <Link href="/quyen-rieng-tu" className="hover:text-[#ffe75c] transition-colors">
+              Quyền riêng tư & bảo mật
             </Link>
             <Link href="/admin/login" className="hover:text-[#ffe75c] transition-colors">
               Quản lý
