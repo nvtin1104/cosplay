@@ -1,46 +1,33 @@
 export default function AdminLoading() {
   return (
-    <div className="p-5 md:p-8 animate-pulse">
-      {/* Header Skeleton */}
-      <div className="flex items-center justify-between">
+    <div className="animate-pulse p-3 sm:p-4 lg:p-5">
+      <div className="mb-3 flex items-center justify-between">
         <div>
-          <div className="h-4 w-20 bg-neutral-200 rounded" />
-          <div className="mt-2 h-8 w-64 bg-neutral-200 rounded-lg" />
-          <div className="mt-2 h-4 w-80 bg-neutral-200 rounded" />
+          <div className="h-3 w-28 rounded bg-neutral-200" />
+          <div className="mt-2 h-7 w-52 rounded-lg bg-neutral-200" />
         </div>
-        <div className="h-10 w-32 bg-neutral-200 rounded-lg" />
       </div>
-
-      {/* Stats Cards Skeleton */}
-      <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="admin-card p-5 bg-white">
-            <div className="h-4 w-24 bg-neutral-200 rounded" />
-            <div className="mt-3 h-8 w-16 bg-neutral-200 rounded" />
+          <div key={i} className="admin-card min-h-[108px] p-3.5 sm:p-4">
+            <div className="h-3 w-24 rounded bg-neutral-200" />
+            <div className="mt-3 h-7 w-28 rounded bg-neutral-200" />
+            <div className="mt-2 h-3 w-32 rounded bg-neutral-100" />
           </div>
         ))}
       </div>
-
-      {/* Table Skeleton */}
-      <div className="admin-card mt-6 bg-white overflow-hidden">
-        <div className="border-b border-neutral-100 p-4 flex gap-4">
-          <div className="h-4 w-32 bg-neutral-200 rounded" />
-          <div className="h-4 w-24 bg-neutral-200 rounded" />
-          <div className="h-4 w-24 bg-neutral-200 rounded" />
+      <div className="admin-card mt-3 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-neutral-100 p-4">
+          <div><div className="h-4 w-44 rounded bg-neutral-200" /><div className="mt-2 h-3 w-56 rounded bg-neutral-100" /></div>
+          <div className="h-6 w-14 rounded-full bg-neutral-100" />
         </div>
         <div className="divide-y divide-neutral-100">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-neutral-200 rounded-lg" />
-                <div>
-                  <div className="h-4 w-44 bg-neutral-200 rounded" />
-                  <div className="mt-1 h-3 w-28 bg-neutral-100 rounded" />
-                </div>
-              </div>
-              <div className="h-4 w-20 bg-neutral-200 rounded" />
-              <div className="h-4 w-12 bg-neutral-200 rounded" />
-              <div className="h-6 w-24 bg-neutral-100 rounded-full" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_1.3fr_1fr_auto] sm:items-center">
+              <div><div className="h-4 w-36 rounded bg-neutral-200" /><div className="mt-2 h-3 w-44 rounded bg-neutral-100" /></div>
+              <div className="h-4 w-40 rounded bg-neutral-100" />
+              <div className="flex gap-1.5"><div className="h-6 w-24 rounded-full bg-neutral-100" /><div className="h-6 w-20 rounded-full bg-neutral-100" /></div>
+              <div className="h-4 w-12 rounded bg-neutral-100" />
             </div>
           ))}
         </div>

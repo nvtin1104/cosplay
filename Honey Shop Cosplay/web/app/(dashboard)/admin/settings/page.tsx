@@ -1,2 +1,2 @@
 import { SettingsManager } from '../../../../components/admin/SettingsManager';
-export default function SettingsPage() { return <div className="p-5 md:p-8"><p className="text-sm font-semibold text-neutral-400">CONFIG</p><h1 className="mt-1 text-3xl font-bold">Cài đặt site</h1><div className="mt-7"><SettingsManager /></div></div>; }
+export default function SettingsPage() { return <div className="p-3 md:p-5"><p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">CONFIG</p><div className="mb-3 mt-0.5 flex flex-wrap items-end justify-between gap-1"><h1 className="text-2xl font-bold">Cài đặt site</h1><p className="text-xs text-neutral-500">Quản lý theo từng nhóm tính năng</p></div><SettingsManager /></div>; }

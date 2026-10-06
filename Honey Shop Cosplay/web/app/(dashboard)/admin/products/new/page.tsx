@@ -7,11 +7,11 @@ export const metadata = {
 
 export default function NewProductPage() {
   return (
-    <div className="p-5 md:p-8">
-      <div className="mb-6">
-        <p className="text-sm font-semibold text-neutral-400">CATALOG / TẠO MỚI</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">Thêm sản phẩm mới</h1>
-        <p className="mt-2 text-sm text-neutral-500">
+    <div className="p-3 sm:p-4 lg:p-5">
+      <div className="mb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-neutral-400">Kho đồ · Tạo mới</p>
+        <h1 className="mt-0.5 text-xl font-bold tracking-tight sm:text-2xl">Thêm sản phẩm mới</h1>
+        <p className="mt-1 text-xs text-neutral-500 sm:text-sm">
           Nhập thông tin trang phục, định giá thuê và quản lý số lượng kho đồ.
         </p>
       </div>

@@ -7,6 +7,10 @@ import type { AuthUser, Post, Product } from '../../lib/types';
 import { AdminButton, AdminInput, AdminSelect, AdminSheetSelect, AdminTextarea } from './AdminUI';
 import { AdminDataTable, useAdminPagedList, updateAdminTableFilter, type AdminDataTableColumn } from './AdminDataTable';
 import { createPortal } from 'react-dom';
+import { rentalOrderStatuses, processingStatusLabels, paymentStatusLabels, formatVnd } from '../../lib/rental-status';
+import { DashboardStats } from './dashboard/DashboardStats';
+import { RentalActionList } from './dashboard/RentalActionList';
+import type { DashboardDataResponse } from './dashboard/types';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -58,16 +62,15 @@ function State({ loading, error }: { loading: boolean; error: string }) {
   return null;
 }
 
-export function DashboardData({ initialData }: { initialData?: { products: Product[]; rentals: any[]; posts: Post[] } }) {
-  const [data, setData] = useState<{ products: Product[]; rentals: any[]; posts: Post[] } | null>(initialData || null);
+export function DashboardData() {
+  const [dashboard, setDashboard] = useState<DashboardDataResponse | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (initialData) return;
     let active = true;
-    Promise.all([api<Product[]>('/products'), api<any[]>('/rentals'), api<Post[]>('/admin/posts')])
-      .then(([products, rentals, posts]) => {
-        if (active) setData({ products, rentals, posts });
+    api<DashboardDataResponse>('/admin/dashboard')
+      .then((result) => {
+        if (active) setDashboard(result);
       })
       .catch((e) => {
         if (active) setError(e.message);
@@ -75,42 +78,17 @@ export function DashboardData({ initialData }: { initialData?: { products: Produ
     return () => {
       active = false;
     };
-  }, [initialData]);
+  }, []);
 
   return (
     <div>
-      {!data ? (
+      {!dashboard ? (
         <State loading={!error} error={error} />
       ) : (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              ['Sản phẩm', data.products.length],
-              ['Lịch thuê', data.rentals.length],
-              ['Bài viết', data.posts.length],
-              ['Đang có sẵn', data.products.filter((p) => p.status === 'AVAILABLE').length],
-            ].map(([label, value]) => (
-              <div className="admin-card p-5" key={String(label)}>
-                <p className="text-sm text-neutral-500">{label}</p>
-                <p className="mt-3 text-3xl font-bold">{value}</p>
-              </div>
-            ))}
-          </div>
-          <div className="admin-card mt-6 p-6">
-            <h2 className="text-lg font-bold">Tình trạng hệ thống</h2>
-            <div className="mt-5 grid gap-3 text-sm md:grid-cols-3">
-              <p className="rounded-lg bg-neutral-100 p-4">
-                Worker API <b className="float-right text-emerald-600 font-bold">Online</b>
-              </p>
-              <p className="rounded-lg bg-neutral-100 p-4">
-                D1 database <b className="float-right text-emerald-600 font-bold">Connected</b>
-              </p>
-              <p className="rounded-lg bg-neutral-100 p-4">
-                Phiên đăng nhập <b className="float-right text-emerald-600 font-bold">Secure</b>
-              </p>
-            </div>
-          </div>
-        </>
+        <div className="space-y-3">
+          <DashboardStats stats={dashboard.stats} />
+          <RentalActionList rentals={dashboard.rentals} totalCount={Number(dashboard.stats.activeOrders || 0)} />
+        </div>
       )}
     </div>
   );
@@ -164,8 +142,6 @@ export function ProductManager() {
   );
 }
 
-const RENTAL_STATUSES = ['HOLD', 'CONFIRMED', 'CANCELLED', 'RETURNED'] as const;
-
 type Rental = {
   id: string;
   customerName: string;
@@ -178,11 +154,13 @@ type Rental = {
   totalAmount?: number;
   note?: string;
   status: string;
+  orderStatus: string;
+  processingStatus: string;
+  paymentStatus: string;
+  customerId?: string | null;
 };
 
 export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] }) {
-  const user = useCurrentUser();
-  const isAdmin = user?.role === 'ADMIN';
   const [items, setItems] = useState<Rental[]>(initialRentals);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(initialRentals.length === 0);
@@ -262,7 +240,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
   async function changeStatus(id: string, status: string) {
     setSavingId(id);
     try {
-      await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+      await api(`/rentals/${id}`, { method: 'PATCH', body: JSON.stringify({ orderStatus: status }) });
       void load();
     } catch (e: any) {
       setError(e.message);
@@ -273,7 +251,6 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
 
   return (
     <>
-      {error && <State loading={false} error={error} />}
       <div className="sticky top-0 z-20 flex min-h-14 items-center justify-between border-b border-neutral-200 bg-white/95 px-3 backdrop-blur md:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="shrink-0 text-base font-bold tracking-tight text-neutral-900">Lịch thuê</h1>
@@ -338,31 +315,33 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
           <AdminButton className="px-4 py-3">Lưu lịch thuê</AdminButton>
         </form>
       )}
-      {loading && items.length === 0 ? <State loading={true} error="" /> : <RentalTable items={items} isAdmin={isAdmin} savingId={savingId} onStatusChange={changeStatus} />}
+      {loading && items.length === 0 ? <State loading={true} error="" /> : <RentalTable items={items} savingId={savingId} onStatusChange={changeStatus} />}
       {error && <div className="px-3 pt-3 text-sm text-red-700">{error}</div>}
       <div className="px-3"><LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} /></div>
     </>
   );
 }
 
-function RentalTable({ items, isAdmin, savingId, onStatusChange }: {
+function RentalTable({ items, savingId, onStatusChange }: {
   items: Rental[];
-  isAdmin: boolean;
   savingId: string;
   onStatusChange: (id: string, status: string) => void;
 }) {
   const columns: AdminDataTableColumn<Rental>[] = [
-    { key: 'customer', header: 'Khách hàng', className: 'min-w-[190px]', render: row => <span className="font-semibold text-neutral-900">{row.customerName}</span> },
+    { key: 'customer', header: 'Khách hàng', className: 'min-w-[190px]', render: row => row.customerId ? <Link href={`/admin/customers/${row.customerId}`} className="font-semibold text-neutral-900 hover:text-amber-800 hover:underline">{row.customerName}</Link> : <span className="font-semibold text-neutral-900">{row.customerName}</span> },
     { key: 'contact', header: 'Liên hệ', className: 'min-w-[230px]', render: row => <span className="block truncate text-xs" title={[row.customerPhone, row.customerEmail].filter(Boolean).join(' · ')}>{[row.customerPhone, row.customerEmail].filter(Boolean).join(' · ') || '—'}</span> },
     { key: 'facebook', header: 'Facebook', className: 'min-w-[105px]', render: row => row.facebookUrl ? <a href={row.facebookUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-700 hover:underline">Mở hồ sơ ↗</a> : <span className="text-neutral-300">—</span> },
     { key: 'dates', header: 'Thời gian thuê', className: 'min-w-[190px] whitespace-nowrap tabular-nums', render: row => <>{new Date(row.startDate).toLocaleDateString('vi-VN')} <span className="text-neutral-300">→</span> {new Date(row.endDate).toLocaleDateString('vi-VN')}</> },
-    { key: 'deposit', header: 'Tiền cọc', className: 'min-w-[100px] whitespace-nowrap text-right tabular-nums', headerClassName: 'text-right', render: row => `${Number(row.deposit || 0).toLocaleString('vi-VN')}đ` },
-    { key: 'total', header: 'Tổng tiền', className: 'min-w-[110px] whitespace-nowrap text-right font-semibold tabular-nums', headerClassName: 'text-right', render: row => `${Number(row.totalAmount || 0).toLocaleString('vi-VN')}đ` },
+    { key: 'deposit', header: 'Tiền cọc', className: 'min-w-[100px] whitespace-nowrap text-right tabular-nums', headerClassName: 'text-right', render: row => formatVnd(Number(row.deposit || 0)) },
+    { key: 'total', header: 'Tổng tiền', className: 'min-w-[110px] whitespace-nowrap text-right font-semibold tabular-nums', headerClassName: 'text-right', render: row => formatVnd(Number(row.totalAmount || 0)) },
     { key: 'note', header: 'Ghi chú', className: 'min-w-[170px] max-w-[260px]', render: row => <span className="block truncate text-xs text-neutral-500" title={row.note || ''}>{row.note || '—'}</span> },
-    { key: 'status', header: 'Trạng thái', className: 'relative min-w-[145px] !p-0', render: row => <AdminSheetSelect ariaLabel={`Trạng thái lịch thuê ${row.id}`} value={row.status} disabled={(row.status === 'CONFIRMED' && !isAdmin) || savingId === row.id} onChange={status => onStatusChange(row.id, status)} options={RENTAL_STATUSES.map(status => ({ value: status, label: status }))} /> },
+    { key: 'orderStatus', header: 'Trạng thái đơn', className: 'relative min-w-[175px] !p-0', render: row => <AdminSheetSelect ariaLabel={`Trạng thái đơn thuê ${row.id}`} value={row.orderStatus || row.status} disabled={['RETURNED', 'CANCELLED'].includes(row.orderStatus || row.status) || savingId === row.id} onChange={status => onStatusChange(row.id, status)} options={rentalOrderStatuses.map(({ value, label }) => ({ value, label }))} /> },
+    { key: 'processingStatus', header: 'Xử lý', className: 'min-w-[115px]', render: row => <span className="text-xs font-medium">{processingStatusLabels[row.processingStatus] || row.processingStatus}</span> },
+    { key: 'paymentStatus', header: 'Thanh toán', className: 'min-w-[125px]', render: row => <span className="text-xs font-medium">{paymentStatusLabels[row.paymentStatus] || row.paymentStatus}</span> },
+    { key: 'details', header: '', className: 'min-w-[80px]', render: row => <Link href={`/admin/rentals/${row.id}`} className="text-xs font-semibold text-amber-800 hover:underline">Chi tiết</Link> },
   ];
 
-  return <AdminDataTable columns={columns} rows={items} emptyMessage="Chưa có lịch thuê." minWidth="1160px" />;
+  return <AdminDataTable columns={columns} rows={items} emptyMessage="Chưa có lịch thuê." minWidth="1420px" />;
 }
 
 export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {

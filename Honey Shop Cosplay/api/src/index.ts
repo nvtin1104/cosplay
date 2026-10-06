@@ -11,6 +11,21 @@ const app = new Hono<{ Bindings: AppEnv; Variables: AppVariables }>();
 const now = () => new Date().toISOString();
 const plusHours = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
 const safeUser = (user: any) => ({ id: user.id, email: user.email, name: user.name, role: user.role, active: !!user.active });
+const ORDER_STATUSES = ['NEW', 'CONFIRMED', 'HANDED_TO_SHIPPER', 'DELIVERED_TO_CUSTOMER', 'RETURNING', 'RETURNED', 'CUSTOMER_REFUSED', 'CANCELLED'];
+const paymentStatus = (totalAmount: number, depositPaid: number, balancePaid: number, depositRefunded: number) => {
+  if (depositPaid > 0 && depositRefunded >= depositPaid) return 'DEPOSIT_REFUNDED';
+  if (totalAmount > 0 && balancePaid >= totalAmount) return 'PAID';
+  if (depositPaid > 0 || balancePaid > 0) return 'DEPOSIT_PAID';
+  return 'UNPAID';
+};
+const processingStatus = (status: string, totalAmount: number, expectedDeposit: number, depositPaid: number, balancePaid: number, depositRefunded: number) => {
+  const netPayments = depositPaid + balancePaid - depositRefunded;
+  if ((totalAmount > 0 || expectedDeposit > 0) && netPayments <= 0) return 'WAITING_FOR_PAYMENT';
+  const balanceSettled = totalAmount <= 0 || balancePaid >= totalAmount;
+  if (['RETURNED', 'CANCELLED'].includes(status) && balanceSettled) return 'COMPLETED';
+  return 'PROCESSING';
+};
+const rentalActor = (user: any) => ({ id: user.id, name: user.name || user.email || 'Nhân viên' });
 const CUSTOMER_SESSION_COOKIE = 'honey_customer_session';
 async function customerFromRequest(c: any) {
   const token = getCookie(c, CUSTOMER_SESSION_COOKIE);
@@ -73,8 +88,8 @@ app.patch('/customers/me', async c => {
 app.get('/customers/rentals', async c => {
   const customer = await customerFromRequest(c);
   if (!customer) return c.json({ message: 'Vui lòng đăng nhập.' }, 401);
-  const result = await c.env.DB.prepare('SELECT r.id,r.customer_name customerName,r.start_date startDate,r.end_date endDate,r.status,r.deposit,r.total_amount totalAmount,r.created_at createdAt,ri.quantity,ri.price,p.title productTitle,p.slug productSlug,p.thumbnail_url thumbnailUrl FROM rentals r LEFT JOIN rental_items ri ON ri.rental_id=r.id LEFT JOIN products p ON p.id=ri.product_id WHERE lower(r.customer_email)=? ORDER BY r.start_date DESC LIMIT 100').bind(customer.email.toLowerCase()).all<any>();
-  return c.json(result.results);
+  const result = await c.env.DB.prepare("SELECT r.id,r.customer_name customerName,r.start_date startDate,r.end_date endDate,r.status orderStatus,r.processing_status processingStatus,r.deposit,r.total_amount totalAmount,r.created_at createdAt,ri.quantity,ri.price,p.title productTitle,p.slug productSlug,p.thumbnail_url thumbnailUrl,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='DEPOSIT'),0) depositPaid,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='BALANCE'),0) balancePaid,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='DEPOSIT_REFUND'),0) depositRefunded FROM rentals r LEFT JOIN rental_items ri ON ri.rental_id=r.id LEFT JOIN products p ON p.id=ri.product_id WHERE lower(r.customer_email)=? ORDER BY r.start_date DESC LIMIT 100").bind(customer.email.toLowerCase()).all<any>();
+  return c.json(result.results.map(row => ({ ...row, status: row.orderStatus, paymentStatus: paymentStatus(Number(row.totalAmount), Number(row.depositPaid), Number(row.balancePaid), Number(row.depositRefunded)) })));
 });
 app.get('/customers/points', async c => {
   const customer = await customerFromRequest(c);
@@ -118,13 +133,23 @@ app.post('/customers/points/redeem', async c => {
   if (Number(overlap?.quantity || 0) >= Number(product.totalQuantity || 1)) return c.json({ message: 'Sản phẩm đã có lịch thuê trùng khoảng ngày này.' }, 409);
   const rentalId = crypto.randomUUID(); const stamp = now();
   try { await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(rentalId, customer.name, customer.email, customer.phone, start.toISOString(), end.toISOString(), 'HOLD', 0, 0, 'Đổi bằng điểm thành viên', stamp, stamp),
+    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,processing_status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(rentalId, customer.name, customer.email, customer.phone, start.toISOString(), end.toISOString(), 'NEW', processingStatus('NEW', 0, 0, 0, 0, 0), 0, 0, 'Đổi bằng điểm thành viên', stamp, stamp),
     c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), rentalId, product.id, null, 1, 0),
     c.env.DB.prepare("INSERT INTO loyalty_transactions (id,customer_id,rental_id,source_key,event_type,points_delta,note,created_at) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), customer.id, rentalId, `redeem:${rentalId}`, 'REDEEM', -Number(product.pointsPrice), `Đổi ${product.title}`, stamp),
+    c.env.DB.prepare('INSERT INTO rental_status_history (id,rental_id,from_status,to_status,from_processing_status,to_processing_status,actor_id,actor_name,created_at) VALUES (?,?,NULL,?,NULL,?,?,?,?)').bind(crypto.randomUUID(), rentalId, 'NEW', processingStatus('NEW', 0, 0, 0, 0, 0), customer.id, customer.name, stamp),
   ]); } catch { return c.json({ message: 'Số dư điểm vừa thay đổi. Hãy tải lại tài khoản và thử lại.' }, 409); }
-  return c.json({ id: rentalId, pointsUsed: Number(product.pointsPrice), status: 'HOLD' }, 201);
+  return c.json({ id: rentalId, pointsUsed: Number(product.pointsPrice), status: 'NEW', orderStatus: 'NEW', processingStatus: processingStatus('NEW', 0, 0, 0, 0, 0) }, 201);
 });
 app.post('/customers/logout', async c => { const token = getCookie(c, CUSTOMER_SESSION_COOKIE); if (token) await c.env.DB.prepare('DELETE FROM customer_sessions WHERE token_hash=?').bind(await sha256(token)).run(); deleteCookie(c, CUSTOMER_SESSION_COOKIE, { path: '/' }); return c.json({ ok: true }); });
+
+app.get('/admin/dashboard', requireAuth, async c => {
+  const [summary, rentals] = await Promise.all([
+    c.env.DB.prepare("SELECT count(*) totalOrders,count(DISTINCT coalesce(nullif(lower(trim(r.customer_email)),''),nullif(lower(trim(r.customer_name)),''))) customerCount,sum(CASE WHEN r.status NOT IN ('RETURNED','CANCELLED') THEN 1 ELSE 0 END) activeOrders,coalesce(sum(coalesce(pt.deposit_paid,0)+coalesce(pt.balance_paid,0)-coalesce(pt.deposit_refunded,0)),0) amountCollected,coalesce(sum(max(0,coalesce(r.total_amount,0)-coalesce(pt.balance_paid,0))),0) amountOutstanding FROM rentals r LEFT JOIN (SELECT rental_id,sum(CASE WHEN type='DEPOSIT' THEN amount ELSE 0 END) deposit_paid,sum(CASE WHEN type='BALANCE' THEN amount ELSE 0 END) balance_paid,sum(CASE WHEN type='DEPOSIT_REFUND' THEN amount ELSE 0 END) deposit_refunded FROM rental_payment_transactions GROUP BY rental_id) pt ON pt.rental_id=r.id").first<any>(),
+    c.env.DB.prepare("SELECT r.id,r.customer_name customerName,r.customer_email customerEmail,r.start_date startDate,r.end_date endDate,r.status orderStatus,r.processing_status processingStatus,r.total_amount totalAmount,r.deposit,r.note,coalesce((SELECT group_concat(p.title, ', ') FROM rental_items ri LEFT JOIN products p ON p.id=ri.product_id WHERE ri.rental_id=r.id),'') productNames,coalesce(pt.deposit_paid,0) depositPaid,coalesce(pt.balance_paid,0) balancePaid,coalesce(pt.deposit_refunded,0) depositRefunded FROM rentals r LEFT JOIN (SELECT rental_id,sum(CASE WHEN type='DEPOSIT' THEN amount ELSE 0 END) deposit_paid,sum(CASE WHEN type='BALANCE' THEN amount ELSE 0 END) balance_paid,sum(CASE WHEN type='DEPOSIT_REFUND' THEN amount ELSE 0 END) deposit_refunded FROM rental_payment_transactions GROUP BY rental_id) pt ON pt.rental_id=r.id WHERE r.status NOT IN ('RETURNED','CANCELLED') ORDER BY r.start_date LIMIT 200").all<any>(),
+  ]);
+  const items = rentals.results.map(row => ({ ...row, status: row.orderStatus, paymentStatus: paymentStatus(Number(row.totalAmount), Number(row.depositPaid), Number(row.balancePaid), Number(row.depositRefunded)) }));
+  return c.json({ stats: summary, rentals: items });
+});
 
 app.get('/admin/customers', requireAuth, requireAdmin, async c => {
   const { limit, offset } = parsePage(c);
@@ -137,6 +162,13 @@ app.get('/admin/customers', requireAuth, requireAdmin, async c => {
   const date = String(c.req.query('date') || '').trim();
   const result = await c.env.DB.prepare("SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.phone,a.active,a.created_at createdAt,coalesce((SELECT sum(points_delta) FROM loyalty_transactions l WHERE l.customer_id=a.id),0) points, (SELECT count(*) FROM rentals r WHERE lower(r.customer_email)=lower(a.email)) rentalCount FROM customer_accounts a WHERE (?='' OR lower(a.name) LIKE ? OR lower(a.email) LIKE ? OR lower(coalesce(a.phone,'')) LIKE ?) AND lower(a.name) LIKE ? AND lower(a.email) LIKE ? AND lower(coalesce(a.phone,'')) LIKE ? AND (?='' OR a.active=?) AND (?='' OR substr(a.created_at,1,10)=?) ORDER BY a.created_at DESC LIMIT ? OFFSET ?").bind(searchText, search, search, search, name, email, phone, active, active === '' ? 0 : Number(active), date, date, limit, offset).all<any>();
   return c.json(result.results.map(row => ({ ...row, active: !!row.active, points: Number(row.points) })));
+});
+app.get('/admin/customers/:id', requireAuth, requireAdmin, async c => {
+  const customer = await c.env.DB.prepare('SELECT id,email,name,facebook_url facebookUrl,phone,active,created_at createdAt FROM customer_accounts WHERE id=?').bind(c.req.param('id')).first<any>();
+  if (!customer) return c.json({ message: 'Không tìm thấy tài khoản khách.' }, 404);
+  const result = await c.env.DB.prepare("SELECT r.id,r.customer_name customerName,r.start_date startDate,r.end_date endDate,r.status orderStatus,r.processing_status processingStatus,r.deposit,r.total_amount totalAmount,r.note,r.created_at createdAt,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='DEPOSIT'),0) depositPaid,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='BALANCE'),0) balancePaid,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='DEPOSIT_REFUND'),0) depositRefunded FROM rentals r WHERE lower(r.customer_email)=lower(?) ORDER BY r.start_date DESC LIMIT 200").bind(customer.email).all<any>();
+  const rentals = result.results.map(row => ({ ...row, status: row.orderStatus, paymentStatus: paymentStatus(Number(row.totalAmount), Number(row.depositPaid), Number(row.balancePaid), Number(row.depositRefunded)) }));
+  return c.json({ ...customer, active: !!customer.active, rentals });
 });
 app.patch('/admin/customers/:id', requireAuth, requireAdmin, async c => {
   const id = c.req.param('id')!; const body = await c.req.json<any>();
@@ -439,12 +471,14 @@ app.patch('/post-categories/:id', requireAuth, async c => { const body = await c
 app.delete('/post-categories/:id', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM post_categories WHERE id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 
 const publicSettingKeys = ['site_name', 'logo_url', 'pinned_tag_ids', 'contact_phone', 'contact_email', 'contact_address', 'contact_facebook', 'contact_zalo', 'points_redemption_enabled'];
+const supportedSettingKeys = [...publicSettingKeys, 'points_currency_step', 'points_per_step', 'points_value_vnd'];
 app.get('/settings', async c => { const rows = await c.env.DB.prepare(`SELECT key,value FROM settings WHERE key IN (${publicSettingKeys.map(() => '?').join(',')})`).bind(...publicSettingKeys).all<{ key: string; value: string }>(); return c.json(Object.fromEntries(rows.results.map(row => [row.key, row.value]))); });
-app.get('/admin/settings', requireAuth, requireAdmin, async c => c.json((await c.env.DB.prepare('SELECT key,value FROM settings ORDER BY key').all()).results));
+app.get('/admin/settings', requireAuth, requireAdmin, async c => c.json((await c.env.DB.prepare(`SELECT key,value FROM settings WHERE key IN (${supportedSettingKeys.map(() => '?').join(',')}) ORDER BY key`).bind(...supportedSettingKeys).all()).results));
 app.put('/admin/settings', requireAuth, requireAdmin, async c => {
   const body = await c.req.json<{ key: string; value: string }>();
   const key = String(body.key || '').trim();
   if (!/^[a-z][a-z0-9_]{1,63}$/.test(key) || typeof body.value !== 'string') return c.json({ message: 'Key hoặc value không hợp lệ' }, 400);
+  if (!supportedSettingKeys.includes(key)) return c.json({ message: 'Cài đặt này chưa được hệ thống hỗ trợ.' }, 400);
   if (['logo_url', 'contact_facebook', 'contact_zalo'].includes(key) && body.value && !/^(https?:\/\/|\/[^/])/.test(body.value)) return c.json({ message: 'URL phải bắt đầu bằng https://, http:// hoặc /' }, 400);
   if (['points_currency_step', 'points_per_step', 'points_value_vnd'].includes(key)) {
     const number = Number(body.value);
@@ -458,12 +492,48 @@ app.put('/admin/settings', requireAuth, requireAdmin, async c => {
   await c.env.DB.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, body.value).run();
   return c.json({ ok: true });
 });
-app.delete('/admin/settings/:key', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM settings WHERE key=?').bind(c.req.param('key')).run(); return c.json({ ok: true }); });
 
 app.get('/rentals', requireAuth, async c => {
   const { limit, offset } = parsePage(c);
-  const result = await c.env.DB.prepare('SELECT r.id,r.customer_name customerName,coalesce(r.customer_phone,a.phone) customerPhone,r.customer_email customerEmail,a.facebook_url facebookUrl,r.start_date startDate,r.end_date endDate,r.status,r.deposit,r.total_amount totalAmount,r.note,r.created_at createdAt,r.updated_at updatedAt FROM rentals r LEFT JOIN customer_accounts a ON lower(a.email)=lower(r.customer_email) ORDER BY r.start_date LIMIT ? OFFSET ?').bind(limit, offset).all<any>();
-  return c.json(result.results);
+  const result = await c.env.DB.prepare("SELECT r.id,r.customer_name customerName,coalesce(r.customer_phone,a.phone) customerPhone,r.customer_email customerEmail,a.id customerId,a.facebook_url facebookUrl,r.start_date startDate,r.end_date endDate,r.status orderStatus,r.processing_status processingStatus,r.deposit,r.total_amount totalAmount,r.note,r.created_at createdAt,r.updated_at updatedAt,(SELECT group_concat(p.title, ', ') FROM rental_items ri LEFT JOIN products p ON p.id=ri.product_id WHERE ri.rental_id=r.id) productNames,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='DEPOSIT'),0) depositPaid,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='BALANCE'),0) balancePaid,coalesce((SELECT sum(amount) FROM rental_payment_transactions WHERE rental_id=r.id AND type='DEPOSIT_REFUND'),0) depositRefunded FROM rentals r LEFT JOIN customer_accounts a ON lower(a.email)=lower(r.customer_email) ORDER BY r.start_date LIMIT ? OFFSET ?").bind(limit, offset).all<any>();
+  return c.json(result.results.map(row => ({ ...row, status: row.orderStatus, paymentStatus: paymentStatus(Number(row.totalAmount), Number(row.depositPaid), Number(row.balancePaid), Number(row.depositRefunded)) })));
+});
+app.get('/rentals/:id', requireAuth, async c => {
+  const id = c.req.param('id');
+  const rental = await c.env.DB.prepare('SELECT r.id,r.customer_name customerName,coalesce(r.customer_phone,a.phone) customerPhone,r.customer_email customerEmail,a.id customerId,a.facebook_url facebookUrl,r.start_date startDate,r.end_date endDate,r.status orderStatus,r.processing_status processingStatus,r.deposit,r.total_amount totalAmount,r.note,r.created_at createdAt,r.updated_at updatedAt FROM rentals r LEFT JOIN customer_accounts a ON lower(a.email)=lower(r.customer_email) WHERE r.id=?').bind(id).first<any>();
+  if (!rental) return c.json({ message: 'Không tìm thấy đơn thuê.' }, 404);
+  const [items, payments, statusHistory] = await Promise.all([
+    c.env.DB.prepare('SELECT ri.id,ri.product_id productId,ri.variant_id variantId,ri.quantity,ri.price,p.title productTitle,p.slug productSlug,p.thumbnail_url thumbnailUrl,pv.name variantName FROM rental_items ri LEFT JOIN products p ON p.id=ri.product_id LEFT JOIN product_variants pv ON pv.id=ri.variant_id WHERE ri.rental_id=?').bind(id).all<any>(),
+    c.env.DB.prepare('SELECT id,type,amount,note,actor_id actorId,actor_name actorName,created_at createdAt FROM rental_payment_transactions WHERE rental_id=? ORDER BY created_at DESC').bind(id).all<any>(),
+    c.env.DB.prepare('SELECT id,from_status fromStatus,to_status toStatus,from_processing_status fromProcessingStatus,to_processing_status toProcessingStatus,actor_id actorId,actor_name actorName,created_at createdAt FROM rental_status_history WHERE rental_id=? ORDER BY created_at DESC').bind(id).all<any>(),
+  ]);
+  const depositPaid = payments.results.filter(row => row.type === 'DEPOSIT').reduce((sum, row) => sum + Number(row.amount), 0);
+  const balancePaid = payments.results.filter(row => row.type === 'BALANCE').reduce((sum, row) => sum + Number(row.amount), 0);
+  const depositRefunded = payments.results.filter(row => row.type === 'DEPOSIT_REFUND').reduce((sum, row) => sum + Number(row.amount), 0);
+  return c.json({ ...rental, status: rental.orderStatus, items: items.results, paymentSummary: { depositPaid, balancePaid, depositRefunded, paymentStatus: paymentStatus(Number(rental.totalAmount), depositPaid, balancePaid, depositRefunded) }, payments: payments.results, statusHistory: statusHistory.results });
+});
+app.post('/rentals/:id/payments', requireAuth, async c => {
+  const id = c.req.param('id'); const body = await c.req.json<any>();
+  const type = String(body.type || ''); const amount = Number(body.amount); const note = String(body.note || '').trim() || null;
+  if (!['DEPOSIT', 'BALANCE', 'DEPOSIT_REFUND'].includes(type) || !Number.isSafeInteger(amount) || amount <= 0) return c.json({ message: 'Loại giao dịch không hợp lệ hoặc số tiền phải lớn hơn 0.' }, 400);
+  const rental = await c.env.DB.prepare('SELECT id,status,processing_status processingStatus,deposit,total_amount totalAmount FROM rentals WHERE id=?').bind(id).first<any>();
+  if (!rental) return c.json({ message: 'Không tìm thấy đơn thuê.' }, 404);
+  const totals = await c.env.DB.prepare("SELECT coalesce(sum(CASE WHEN type='DEPOSIT' THEN amount ELSE 0 END),0) depositPaid,coalesce(sum(CASE WHEN type='BALANCE' THEN amount ELSE 0 END),0) balancePaid,coalesce(sum(CASE WHEN type='DEPOSIT_REFUND' THEN amount ELSE 0 END),0) depositRefunded FROM rental_payment_transactions WHERE rental_id=?").bind(id).first<any>();
+  if (type === 'DEPOSIT' && Number(rental.deposit) > 0 && Number(totals.depositPaid) + amount > Number(rental.deposit)) return c.json({ message: 'Số tiền cọc vượt quá tiền cọc của đơn.' }, 400);
+  if (type === 'BALANCE' && Number(rental.totalAmount) > 0 && Number(totals.balancePaid) + amount > Number(rental.totalAmount)) return c.json({ message: 'Số tiền thu vượt quá tổng tiền thuê.' }, 400);
+  if (type === 'DEPOSIT_REFUND' && Number(totals.depositPaid) - Number(totals.depositRefunded) < amount) return c.json({ message: 'Số tiền hoàn vượt quá tiền cọc đã nhận.' }, 400);
+  const actor = rentalActor(c.get('user')); const stamp = now();
+  const nextDepositPaid = Number(totals.depositPaid) + (type === 'DEPOSIT' ? amount : 0);
+  const nextBalancePaid = Number(totals.balancePaid) + (type === 'BALANCE' ? amount : 0);
+  const nextDepositRefunded = Number(totals.depositRefunded) + (type === 'DEPOSIT_REFUND' ? amount : 0);
+  const nextProcessingStatus = processingStatus(rental.status, Number(rental.totalAmount), Number(rental.deposit), nextDepositPaid, nextBalancePaid, nextDepositRefunded);
+  const statements = [
+    c.env.DB.prepare('INSERT INTO rental_payment_transactions (id,rental_id,type,amount,note,actor_id,actor_name,created_at) VALUES (?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(), id, type, amount, note, actor.id, actor.name, stamp),
+    c.env.DB.prepare('UPDATE rentals SET processing_status=?,updated_at=? WHERE id=?').bind(nextProcessingStatus, stamp, id),
+  ];
+  if (nextProcessingStatus !== rental.processingStatus) statements.push(c.env.DB.prepare('INSERT INTO rental_status_history (id,rental_id,from_status,to_status,from_processing_status,to_processing_status,actor_id,actor_name,created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(), id, rental.status, rental.status, rental.processingStatus, nextProcessingStatus, actor.id, actor.name, stamp));
+  await c.env.DB.batch(statements);
+  return c.json({ ok: true, processingStatus: nextProcessingStatus });
 });
 app.post('/rental-requests', async c => {
   const customer = await customerFromRequest(c);
@@ -481,22 +551,46 @@ app.post('/rental-requests', async c => {
   const price = Number(product[type === 'test' ? 'testPrice' : type === 'shoot' ? 'shootPrice' : 'fesPrice']) || 0;
   const id = crypto.randomUUID(); const stamp = now();
   await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(id, customerName, customerEmail, customerPhone, start.toISOString(), end.toISOString(), 'HOLD', 0, price, String(body.note || '').trim() || null, stamp, stamp),
+    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,processing_status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id, customerName, customerEmail, customerPhone, start.toISOString(), end.toISOString(), 'NEW', processingStatus('NEW', price, 0, 0, 0, 0), 0, price, String(body.note || '').trim() || null, stamp, stamp),
     c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, product.id, null, 1, price),
+    c.env.DB.prepare('INSERT INTO rental_status_history (id,rental_id,from_status,to_status,from_processing_status,to_processing_status,actor_id,actor_name,created_at) VALUES (?,?,NULL,?,NULL,?,?,?,?)').bind(crypto.randomUUID(), id, 'NEW', processingStatus('NEW', price, 0, 0, 0, 0), customer.id, customer.name, stamp),
   ]);
-  return c.json({ id, status: 'HOLD' }, 201);
+  return c.json({ id, status: 'NEW', orderStatus: 'NEW', processingStatus: processingStatus('NEW', price, 0, 0, 0, 0) }, 201);
 });
-app.post('/rentals', requireAuth, async c => { const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate); if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400); const db = drizzle(c.env.DB); for (const item of body.items || []) { const product = await db.select().from(products).where(eq(products.id, item.productId)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get(); if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409); } const id = crypto.randomUUID(); const stamp = now(); await c.env.DB.batch([c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, String(body.customerEmail || '').trim().toLowerCase() || null, body.customerPhone || null, start.toISOString(), end.toISOString(), body.status || 'HOLD', body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp), ...(body.items || []).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0))]); return c.json({ id }, 201); });
+app.post('/rentals', requireAuth, async c => {
+  const body = await c.req.json<any>(); const start = new Date(body.startDate); const end = new Date(body.endDate);
+  if (!(end > start)) return c.json({ message: 'endDate must be after startDate' }, 400);
+  const db = drizzle(c.env.DB);
+  for (const item of body.items || []) {
+    const product = await db.select().from(products).where(eq(products.id, item.productId)).get();
+    if (!product) return c.json({ message: 'Product not found' }, 404);
+    const overlap = await db.select({ quantity: sql<number>`coalesce(sum(${rentalItems.quantity}), 0)` }).from(rentalItems).innerJoin(rentals, eq(rentalItems.rentalId, rentals.id)).where(sql`${rentalItems.productId} = ${item.productId} AND ${rentals.status} != 'CANCELLED' AND ${rentals.startDate} < ${end.toISOString()} AND ${rentals.endDate} > ${start.toISOString()}`).get();
+    if (Number(overlap?.quantity || 0) + Number(item.quantity || 1) > product.totalQuantity) return c.json({ message: 'Product quantity is unavailable for this period' }, 409);
+  }
+  const id = crypto.randomUUID(); const stamp = now(); const actor = rentalActor(c.get('user'));
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,processing_status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id, body.customerName, String(body.customerEmail || '').trim().toLowerCase() || null, body.customerPhone || null, start.toISOString(), end.toISOString(), 'NEW', processingStatus('NEW', Number(body.totalAmount) || 0, Number(body.deposit) || 0, 0, 0, 0), body.deposit || 0, body.totalAmount || 0, body.note || null, stamp, stamp),
+    ...((body.items || []) as any[]).map((item: any) => c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), id, item.productId, item.variantId || null, item.quantity || 1, item.price || 0)),
+    c.env.DB.prepare('INSERT INTO rental_status_history (id,rental_id,from_status,to_status,from_processing_status,to_processing_status,actor_id,actor_name,created_at) VALUES (?,?,NULL,?,NULL,?,?,?,?)').bind(crypto.randomUUID(), id, 'NEW', processingStatus('NEW', Number(body.totalAmount) || 0, Number(body.deposit) || 0, 0, 0, 0), actor.id, actor.name, stamp),
+  ]);
+  return c.json({ id, status: 'NEW', orderStatus: 'NEW', processingStatus: processingStatus('NEW', Number(body.totalAmount) || 0, Number(body.deposit) || 0, 0, 0, 0) }, 201);
+});
 app.patch('/rentals/:id', requireAuth, async c => {
   const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB);
   const current = await db.select().from(rentals).where(eq(rentals.id, id)).get();
   if (!current) return c.json({ message: 'Không tìm thấy đơn thuê.' }, 404);
-  const status = String(body.status || current.status);
-  if (!['HOLD', 'CONFIRMED', 'CANCELLED', 'RETURNED'].includes(status)) return c.json({ message: 'Trạng thái đơn thuê không hợp lệ.' }, 400);
-  if (current.status === 'RETURNED' && status !== 'RETURNED') return c.json({ message: 'Đơn đã hoàn tất không thể chuyển sang trạng thái khác.' }, 400);
-  if (current.status === 'CONFIRMED' && c.get('user').role !== 'ADMIN') return c.json({ message: 'Chỉ ADMIN mới được sửa lịch thuê đã xác nhận.' }, 403);
+  const status = String(body.orderStatus || body.status || '');
+  if (!ORDER_STATUSES.includes(status)) return c.json({ message: 'Trạng thái đơn thuê không hợp lệ.' }, 400);
+  if (['RETURNED', 'CANCELLED'].includes(current.status) && status !== current.status) return c.json({ message: 'Đơn đã hoàn tất không thể chuyển sang trạng thái khác.' }, 400);
+  if (status === current.status) return c.json({ ok: true, orderStatus: status, processingStatus: current.processingStatus, earnedPoints: 0 });
+  const totals = await c.env.DB.prepare("SELECT coalesce(sum(CASE WHEN type='DEPOSIT' THEN amount ELSE 0 END),0) depositPaid,coalesce(sum(CASE WHEN type='BALANCE' THEN amount ELSE 0 END),0) balancePaid,coalesce(sum(CASE WHEN type='DEPOSIT_REFUND' THEN amount ELSE 0 END),0) depositRefunded FROM rental_payment_transactions WHERE rental_id=?").bind(id).first<any>();
+  const nextProcessingStatus = processingStatus(status, Number(current.totalAmount), Number(current.deposit), Number(totals?.depositPaid || 0), Number(totals?.balancePaid || 0), Number(totals?.depositRefunded || 0));
   let earnedPoints = 0; const stamp = now();
-  const statements: D1PreparedStatement[] = [c.env.DB.prepare('UPDATE rentals SET status=?,updated_at=? WHERE id=?').bind(status, stamp, id)];
+  const actor = rentalActor(c.get('user'));
+  const statements: D1PreparedStatement[] = [
+    c.env.DB.prepare('UPDATE rentals SET status=?,processing_status=?,updated_at=? WHERE id=?').bind(status, nextProcessingStatus, stamp, id),
+    c.env.DB.prepare('INSERT INTO rental_status_history (id,rental_id,from_status,to_status,from_processing_status,to_processing_status,actor_id,actor_name,created_at) VALUES (?,?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(), id, current.status, status, current.processingStatus, nextProcessingStatus, actor.id, actor.name, stamp),
+  ];
   if (status === 'RETURNED' && current.status !== 'RETURNED' && current.customerEmail) {
     const email = current.customerEmail.toLowerCase();
     let customer = await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE lower(email)=?').bind(email).first<{ id: string }>();
@@ -526,7 +620,7 @@ app.patch('/rentals/:id', requireAuth, async c => {
     if (redemption) statements.push(c.env.DB.prepare("INSERT OR IGNORE INTO loyalty_transactions (id,customer_id,rental_id,source_key,event_type,points_delta,note,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), redemption.customer_id, id, `refund:${id}`, 'REFUND', Math.abs(Number(redemption.points_delta)), `Hoàn điểm do hủy đơn #${id.slice(0, 8)}`, c.get('user').id, stamp));
   }
   await c.env.DB.batch(statements);
-  return c.json({ ok: true, earnedPoints });
+  return c.json({ ok: true, status, orderStatus: status, processingStatus: nextProcessingStatus, earnedPoints });
 });
 
 app.get('/categories', async c => {

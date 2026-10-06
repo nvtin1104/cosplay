@@ -9,17 +9,17 @@ export const metadata = {
 
 export default function CategoriesPage() {
   return (
-    <div className="p-5 md:p-8 max-w-7xl mx-auto">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="mx-auto max-w-7xl p-3 sm:p-4 lg:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold tracking-wider text-amber-600 uppercase">CATALOG & TAXONOMY</p>
-          <h1 className="mt-1 text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Quản lý Cây danh mục</h1>
-          <p className="mt-1.5 text-sm text-neutral-500 max-w-2xl">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Danh mục sản phẩm</p>
+          <h1 className="mt-0.5 text-xl font-bold tracking-tight text-neutral-900 sm:text-2xl">Quản lý cây danh mục</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-neutral-500 sm:text-sm">
             Phân loại trang phục và phụ kiện cosplay theo các tầng cấp bậc (Tầng 1: Gốc, Tầng 2: Nhóm/Series, Tầng 3+: Chi tiết). Mã Key (Slug) dùng làm định danh lọc URL trên trang người dùng.
           </p>
         </div>
       </div>
-      <div className="mt-6">
+      <div className="mt-4">
         <CategoryManager />
       </div>
     </div>

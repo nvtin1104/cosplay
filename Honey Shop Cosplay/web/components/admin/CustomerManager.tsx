@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { ExternalLink, UserRound, Wallet } from 'lucide-react';
 import { AdminButton, AdminInput } from './AdminUI';
 import { AdminDataTable, useAdminPagedList, updateAdminTableFilter, type AdminDataTableColumn } from './AdminDataTable';
@@ -25,7 +26,7 @@ export function CustomerManager() {
   async function adjust(event: FormEvent) { event.preventDefault(); if (!adjustCustomer) return; setBusyId(adjustCustomer.id); try { await api(`/admin/customers/${adjustCustomer.id}/points`, { method: 'POST', body: JSON.stringify({ pointsDelta: Number(delta), note: reason }) }); setAdjustCustomer(null); setDelta(''); setReason(''); reload(); } catch (e) { setError((e as Error).message); } finally { setBusyId(''); } }
 
   const columns: AdminDataTableColumn<Customer>[] = [
-    { key: 'name', header: 'Khách hàng', className: 'min-w-[170px]', render: customer => <span className="inline-flex items-center gap-2 font-semibold text-neutral-900"><UserRound size={14} className="text-neutral-400" />{customer.name}</span> },
+    { key: 'name', header: 'Khách hàng', className: 'min-w-[170px]', render: customer => <Link href={`/admin/customers/${customer.id}`} className="inline-flex items-center gap-2 font-semibold text-neutral-900 hover:text-amber-800 hover:underline"><UserRound size={14} className="text-neutral-400" />{customer.name}</Link> },
     { key: 'email', header: 'Email', className: 'min-w-[200px] text-xs', render: customer => customer.email },
     { key: 'phone', header: 'Điện thoại', className: 'min-w-[130px] text-xs', render: customer => customer.phone ? <a href={`tel:${customer.phone}`} className="hover:underline">{customer.phone}</a> : '—' },
     { key: 'points', header: 'Điểm', className: 'min-w-[90px] text-right tabular-nums', headerClassName: 'text-right', render: customer => <span className="inline-flex items-center gap-1 font-semibold text-amber-800"><Wallet size={13} />{customer.points.toLocaleString('vi-VN')}</span> },

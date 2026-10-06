@@ -118,7 +118,7 @@ export function AdminDataTable<T extends { id: string | number }>({
 }) {
   const filterCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && Boolean(value)).length;
   const [activeFilterKey, setActiveFilterKey] = useState<string | null>(null);
-  const [popupStyle, setPopupStyle] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [popupStyle, setPopupStyle] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 250 });
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
   const activeFilter = columns.find(column => column.filter?.key === activeFilterKey)?.filter;
@@ -127,11 +127,12 @@ export function AdminDataTable<T extends { id: string | number }>({
     const anchor = anchorRef.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
-    const width = 250;
+    const width = Math.min(250, window.innerWidth - 16);
     const height = popupRef.current?.getBoundingClientRect().height || 128;
     setPopupStyle({
       top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - height - 8)),
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
+      width,
     });
   }, []);
 
@@ -158,7 +159,7 @@ export function AdminDataTable<T extends { id: string | number }>({
   const renderFilterPopup = () => {
     if (!activeFilter || typeof document === 'undefined') return null;
     const value = filters[activeFilter.key] || '';
-    return createPortal(<div ref={popupRef} role="dialog" aria-label={`Lọc ${activeFilter.label}`} style={{ position: 'fixed', top: popupStyle.top, left: popupStyle.left, width: 250 }} className="z-[100] rounded-lg border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-900/10">
+    return createPortal(<div ref={popupRef} role="dialog" aria-label={`Lọc ${activeFilter.label}`} style={{ position: 'fixed', top: popupStyle.top, left: popupStyle.left, width: popupStyle.width }} className="z-[100] rounded-lg border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-900/10">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-neutral-800">Lọc: {activeFilter.label}</span>
         <button type="button" aria-label="Đóng bộ lọc" onClick={() => setActiveFilterKey(null)} className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"><X size={14} /></button>

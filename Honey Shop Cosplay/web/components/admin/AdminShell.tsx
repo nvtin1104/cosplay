@@ -40,6 +40,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setCollapsed(localStorage.getItem('honey_admin_sidebar_collapsed') === 'true');
   }, []);
 
+  useEffect(() => {
+    if (contentLinks.some(([href]) => path === href || path.startsWith(`${href}/`))) setContentOpen(true);
+  }, [path]);
+
   function toggleSidebar() {
     setCollapsed(value => {
       localStorage.setItem('honey_admin_sidebar_collapsed', String(!value));
@@ -99,7 +103,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Link href="/admin" prefetch={true} title="HONEY / ADMIN" className={`overflow-hidden whitespace-nowrap text-lg font-extrabold tracking-tight ${collapsed ? 'sr-only' : ''}`}>
             HONEY / ADMIN
           </Link>
-          <button className="md:hidden" onClick={() => setOpen(false)}>
+          <button aria-label="Đóng thanh điều hướng" className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 md:hidden" onClick={() => setOpen(false)}>
             <X />
           </button>
         </div>
@@ -129,7 +133,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
           <div className="pt-4">
-            <button type="button" title={collapsed ? 'Nội dung' : undefined} aria-expanded={contentOpen} aria-controls="admin-content-submenu" onClick={() => collapsed ? setCollapsed(false) : setContentOpen(value => !value)}
+            <button type="button" title={collapsed ? 'Nội dung' : undefined} aria-expanded={contentOpen} aria-controls="admin-content-submenu" onClick={() => {
+              if (collapsed) {
+                setCollapsed(false);
+                localStorage.setItem('honey_admin_sidebar_collapsed', 'false');
+                setContentOpen(true);
+              } else setContentOpen(value => !value);
+            }}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ${contentOpen ? 'text-neutral-900' : 'text-neutral-600 hover:bg-neutral-100 hover:text-black'}`}>
               <span className={`flex items-center gap-3 ${collapsed ? 'mx-auto' : ''}`}><Layers size={17} />{!collapsed && <span className="text-[10px] uppercase tracking-[.2em]">Nội dung</span>}</span>
               {!collapsed && <ChevronDown size={16} className={`transition-transform duration-200 ${contentOpen ? 'rotate-180' : ''}`} />}
@@ -161,9 +171,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
+      {open && <button type="button" aria-label="Đóng thanh điều hướng" onClick={() => setOpen(false)} className="fixed inset-0 z-30 bg-black/30 md:hidden" />}
       <div className={`min-w-0 transition-[margin] duration-200 ${sidebarWidth}`}>
         <header className={`flex items-center justify-between border-b border-neutral-200 bg-white ${isDenseListPage ? 'h-11 px-3' : 'h-16 px-5 md:px-8'}`}>
-          <button className="md:hidden" onClick={() => setOpen(true)}>
+          <button aria-label="Mở thanh điều hướng" aria-expanded={open} className="rounded-md p-1 text-neutral-600 hover:bg-neutral-100 md:hidden" onClick={() => setOpen(true)}>
             <Menu />
           </button>
           <div className="hidden items-center gap-3 md:flex">
