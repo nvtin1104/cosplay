@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { PublicHeader } from '../../components/PublicHeader';
 import { getSettings } from '../../lib/api';
+import { CustomerAuthProvider } from '../../components/CustomerAuth';
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettings();
   const siteName = settings.site_name || 'Honey Shop Cosplay';
   return (
-    <>
+    <CustomerAuthProvider>
       <PublicHeader siteName={siteName} logoUrl={settings.logo_url} />
       <main className="mx-auto w-full max-w-[1440px]">{children}</main>
       <footer className="border-t-2 border-[#24150e] bg-[#24150e] py-12 text-[#fff6dc]">
@@ -49,6 +50,6 @@ export default async function PublicLayout({ children }: { children: React.React
           <span className="text-[#ffe75c]/80">Mặc nhân vật bạn yêu, tỏa sáng theo cách riêng ✦</span>
         </div>
       </footer>
-    </>
+    </CustomerAuthProvider>
   );
 }

@@ -15,7 +15,8 @@ const CUSTOMER_SESSION_COOKIE = 'honey_customer_session';
 async function customerFromRequest(c: any) {
   const token = getCookie(c, CUSTOMER_SESSION_COOKIE);
   if (!token) return null;
-  return c.env.DB.prepare('SELECT a.id,a.email,a.name,a.facebook_url facebookUrl FROM customer_sessions s JOIN customer_accounts a ON a.id=s.customer_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1').bind(await sha256(token), now()).first();
+  const customer = await c.env.DB.prepare('SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.phone FROM customer_sessions s JOIN customer_accounts a ON a.id=s.customer_id WHERE s.token_hash=? AND s.expires_at>? AND a.active=1').bind(await sha256(token), now()).first() as any;
+  return customer ? { ...customer, contactReady: !!(customer.facebookUrl || customer.phone) } : null;
 }
 async function createCustomerSession(c: any, customerId: string) {
   const token = randomToken();
@@ -43,15 +44,15 @@ app.post('/customers/google', async c => {
   const identity = await response.json() as { aud?: string; email_verified?: string; exp?: string; email?: string; name?: string };
   if (identity.aud !== c.env.GOOGLE_CLIENT_ID || identity.email_verified !== 'true' || Number(identity.exp) * 1000 <= Date.now()) return c.json({ message: 'Không xác minh được tài khoản Google.' }, 401);
   const email = String(identity.email || '').toLowerCase();
-  let customer = await c.env.DB.prepare('SELECT id,email,name,facebook_url facebookUrl,active FROM customer_accounts WHERE email=?').bind(email).first<any>();
+  let customer = await c.env.DB.prepare('SELECT id,email,name,facebook_url facebookUrl,phone,active FROM customer_accounts WHERE email=?').bind(email).first<any>();
   if (customer && !customer.active) return c.json({ message: 'Tài khoản đang tạm khóa. Hãy liên hệ shop để được hỗ trợ.' }, 403);
   if (!customer) {
     const id = crypto.randomUUID(); const stamp = now(); const name = String(identity.name || email.split('@')[0]);
     await c.env.DB.prepare('INSERT INTO customer_accounts (id,email,name,created_at,updated_at) VALUES (?,?,?,?,?)').bind(id, email, name, stamp, stamp).run();
-    customer = { id, email, name, facebookUrl: null };
+    customer = { id, email, name, facebookUrl: null, phone: null };
   }
   await createCustomerSession(c, customer.id);
-  return c.json({ user: customer });
+  return c.json({ user: { ...customer, contactReady: !!(customer.facebookUrl || customer.phone) } });
 });
 app.get('/customers/me', async c => {
   const customer = await customerFromRequest(c);
@@ -60,11 +61,14 @@ app.get('/customers/me', async c => {
 app.patch('/customers/me', async c => {
   const customer = await customerFromRequest(c);
   if (!customer) return c.json({ message: 'Vui lòng đăng nhập.' }, 401);
-  const body = await c.req.json<any>(); const name = String(body.name || '').trim(); const facebookUrl = String(body.facebookUrl || '').trim();
-  if (!name) return c.json({ message: 'Tên hiển thị không được để trống.' }, 400);
+  const body = await c.req.json<any>();
+  const facebookUrl = body.facebookUrl === undefined ? customer.facebookUrl : String(body.facebookUrl || '').trim();
+  const phone = body.phone === undefined ? customer.phone : String(body.phone || '').trim();
   if (facebookUrl && !/^https:\/\/(www\.)?facebook\.com\//i.test(facebookUrl)) return c.json({ message: 'Link Facebook không hợp lệ.' }, 400);
-  await c.env.DB.prepare('UPDATE customer_accounts SET name=?,facebook_url=?,updated_at=? WHERE id=?').bind(name, facebookUrl || null, now(), customer.id).run();
-  return c.json({ user: { ...customer, name, facebookUrl: facebookUrl || null } });
+  if (phone && !/^\+?[0-9\s().-]{7,24}$/.test(phone)) return c.json({ message: 'Số điện thoại không hợp lệ.' }, 400);
+  if (!facebookUrl && !phone) return c.json({ message: 'Vui lòng nhập link Facebook hoặc số điện thoại để Honey liên hệ.' }, 400);
+  await c.env.DB.prepare('UPDATE customer_accounts SET facebook_url=?,phone=?,updated_at=? WHERE id=?').bind(facebookUrl || null, phone || null, now(), customer.id).run();
+  return c.json({ user: { ...customer, facebookUrl: facebookUrl || null, phone: phone || null, contactReady: true } });
 });
 app.get('/customers/rentals', async c => {
   const customer = await customerFromRequest(c);
@@ -88,23 +92,33 @@ app.get('/customers/feedback', async c => {
   const rows = await c.env.DB.prepare('SELECT f.id,f.content,f.image_url imageUrl,f.status,f.created_at createdAt,p.title productTitle,p.slug productSlug FROM product_feedback f JOIN products p ON p.id=f.product_id WHERE f.customer_id=? ORDER BY f.created_at DESC LIMIT 100').bind(customer.id).all<any>();
   return c.json(rows.results);
 });
+app.get('/customers/eligible-feedback/:slug', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập để kiểm tra lịch sử thuê.' }, 401);
+  if (!customer.contactReady) return c.json({ message: 'Hãy bổ sung cách liên hệ trước khi gửi feedback.' }, 428);
+  const product = await c.env.DB.prepare("SELECT id FROM products WHERE slug=? AND status!='ARCHIVED'").bind(c.req.param('slug')).first<{ id: string }>();
+  if (!product) return c.json({ message: 'Không tìm thấy sản phẩm.' }, 404);
+  const rentals = await c.env.DB.prepare("SELECT r.id,r.start_date startDate,r.end_date endDate FROM rentals r JOIN rental_items ri ON ri.rental_id=r.id WHERE lower(r.customer_email)=? AND ri.product_id=? AND r.status='RETURNED' AND NOT EXISTS (SELECT 1 FROM product_feedback f WHERE f.rental_id=r.id AND f.product_id=ri.product_id) ORDER BY r.end_date DESC LIMIT 100").bind(customer.email.toLowerCase(), product.id).all<any>();
+  return c.json(rentals.results);
+});
 app.post('/customers/points/redeem', async c => {
   const customer = await customerFromRequest(c);
   if (!customer) return c.json({ message: 'Đăng nhập tài khoản khách để đổi điểm.' }, 401);
+  if (!customer.contactReady) return c.json({ message: 'Hãy bổ sung cách liên hệ trước khi đổi điểm.' }, 428);
   const settings = await c.env.DB.prepare("SELECT value FROM settings WHERE key='points_redemption_enabled'").first<{ value: string }>();
   if (settings?.value === '0') return c.json({ message: 'Shop đang tạm dừng đổi điểm.' }, 400);
   const body = await c.req.json<any>();
   const product = await c.env.DB.prepare("SELECT id,slug,title,points_price pointsPrice,total_quantity totalQuantity,status FROM products WHERE slug=? AND status='AVAILABLE'").bind(String(body.productSlug || '')).first<any>();
   if (!product || Number(product.pointsPrice) <= 0) return c.json({ message: 'Sản phẩm này hiện chưa áp dụng đổi điểm.' }, 400);
-  const start = new Date(body.startDate); const end = new Date(body.endDate); const phone = String(body.customerPhone || '').trim();
-  if (!phone || !Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || end <= start) return c.json({ message: 'Nhập số điện thoại và khoảng ngày thuê hợp lệ.' }, 400);
+  const start = new Date(body.startDate); const end = new Date(body.endDate);
+  if (!Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || end <= start) return c.json({ message: 'Nhập khoảng ngày thuê hợp lệ.' }, 400);
   const balance = await c.env.DB.prepare('SELECT coalesce(sum(points_delta),0) balance FROM loyalty_transactions WHERE customer_id=?').bind(customer.id).first<{ balance: number }>();
   if (Number(balance?.balance || 0) < Number(product.pointsPrice)) return c.json({ message: `Bạn cần ${product.pointsPrice} điểm để đổi sản phẩm này.` }, 400);
   const overlap = await c.env.DB.prepare("SELECT coalesce(sum(ri.quantity),0) quantity FROM rental_items ri JOIN rentals r ON r.id=ri.rental_id WHERE ri.product_id=? AND r.status!='CANCELLED' AND r.start_date<? AND r.end_date>?").bind(product.id, end.toISOString(), start.toISOString()).first<{ quantity: number }>();
   if (Number(overlap?.quantity || 0) >= Number(product.totalQuantity || 1)) return c.json({ message: 'Sản phẩm đã có lịch thuê trùng khoảng ngày này.' }, 409);
   const rentalId = crypto.randomUUID(); const stamp = now();
   try { await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(rentalId, customer.name, customer.email, phone, start.toISOString(), end.toISOString(), 'HOLD', 0, 0, 'Đổi bằng điểm thành viên', stamp, stamp),
+    c.env.DB.prepare('INSERT INTO rentals (id,customer_name,customer_email,customer_phone,start_date,end_date,status,deposit,total_amount,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').bind(rentalId, customer.name, customer.email, customer.phone, start.toISOString(), end.toISOString(), 'HOLD', 0, 0, 'Đổi bằng điểm thành viên', stamp, stamp),
     c.env.DB.prepare('INSERT INTO rental_items (id,rental_id,product_id,variant_id,quantity,price) VALUES (?,?,?,?,?,?)').bind(crypto.randomUUID(), rentalId, product.id, null, 1, 0),
     c.env.DB.prepare("INSERT INTO loyalty_transactions (id,customer_id,rental_id,source_key,event_type,points_delta,note,created_at) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(), customer.id, rentalId, `redeem:${rentalId}`, 'REDEEM', -Number(product.pointsPrice), `Đổi ${product.title}`, stamp),
   ]); } catch { return c.json({ message: 'Số dư điểm vừa thay đổi. Hãy tải lại tài khoản và thử lại.' }, 409); }
@@ -114,7 +128,7 @@ app.post('/customers/logout', async c => { const token = getCookie(c, CUSTOMER_S
 
 app.get('/admin/customers', requireAuth, requireAdmin, async c => {
   const q = `%${String(c.req.query('q') || '').trim().toLowerCase()}%`;
-  const result = await c.env.DB.prepare("SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.active,a.created_at createdAt,coalesce((SELECT sum(points_delta) FROM loyalty_transactions l WHERE l.customer_id=a.id),0) points, (SELECT count(*) FROM rentals r WHERE lower(r.customer_email)=lower(a.email)) rentalCount FROM customer_accounts a WHERE lower(a.email) LIKE ? OR lower(a.name) LIKE ? ORDER BY a.created_at DESC LIMIT 300").bind(q, q).all<any>();
+  const result = await c.env.DB.prepare("SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.phone,a.active,a.created_at createdAt,coalesce((SELECT sum(points_delta) FROM loyalty_transactions l WHERE l.customer_id=a.id),0) points, (SELECT count(*) FROM rentals r WHERE lower(r.customer_email)=lower(a.email)) rentalCount FROM customer_accounts a WHERE lower(a.email) LIKE ? OR lower(a.name) LIKE ? ORDER BY a.created_at DESC LIMIT 300").bind(q, q).all<any>();
   return c.json(result.results.map(row => ({ ...row, active: !!row.active, points: Number(row.points) })));
 });
 app.patch('/admin/customers/:id', requireAuth, requireAdmin, async c => {
@@ -123,7 +137,7 @@ app.patch('/admin/customers/:id', requireAuth, requireAdmin, async c => {
   if (!current) return c.json({ message: 'Không tìm thấy tài khoản khách.' }, 404);
   if (body.name !== undefined && !String(body.name).trim()) return c.json({ message: 'Tên không được để trống.' }, 400);
   if (body.facebookUrl && !/^https:\/\/(www\.)?facebook\.com\//i.test(String(body.facebookUrl))) return c.json({ message: 'Link Facebook không hợp lệ.' }, 400);
-  await c.env.DB.prepare('UPDATE customer_accounts SET name=coalesce(?,name),facebook_url=coalesce(?,facebook_url),active=coalesce(?,active),updated_at=? WHERE id=?').bind(body.name === undefined ? null : String(body.name).trim(), body.facebookUrl === undefined ? null : String(body.facebookUrl).trim(), body.active === undefined ? null : body.active ? 1 : 0, now(), id).run();
+  await c.env.DB.prepare('UPDATE customer_accounts SET name=coalesce(?,name),facebook_url=coalesce(?,facebook_url),phone=coalesce(?,phone),active=coalesce(?,active),updated_at=? WHERE id=?').bind(body.name === undefined ? null : String(body.name).trim(), body.facebookUrl === undefined ? null : String(body.facebookUrl).trim(), body.phone === undefined ? null : String(body.phone).trim(), body.active === undefined ? null : body.active ? 1 : 0, now(), id).run();
   if (body.active === false) await c.env.DB.prepare('DELETE FROM customer_sessions WHERE customer_id=?').bind(id).run();
   return c.json({ ok: true });
 });
@@ -139,7 +153,7 @@ app.post('/admin/customers/:id/points', requireAuth, requireAdmin, async c => {
 });
 app.get('/admin/feedback', requireAuth, requireAdmin, async c => {
   const status = c.req.query('status');
-  const sqlText = "SELECT f.id,f.product_id productId,p.title productTitle,p.slug productSlug,f.customer_id customerId,coalesce(a.name,f.customer_name) customerName,f.customer_email customerEmail,f.content,f.image_url imageUrl,f.hide_identity hideIdentity,f.status,f.created_at createdAt FROM product_feedback f JOIN products p ON p.id=f.product_id LEFT JOIN customer_accounts a ON a.id=f.customer_id";
+  const sqlText = "SELECT f.id,f.product_id productId,p.title productTitle,p.slug productSlug,f.customer_id customerId,f.rental_id rentalId,coalesce(a.name,f.customer_name) customerName,f.customer_email customerEmail,f.content,f.image_url imageUrl,f.hide_identity hideIdentity,f.status,f.created_at createdAt FROM product_feedback f JOIN products p ON p.id=f.product_id LEFT JOIN customer_accounts a ON a.id=f.customer_id";
   const result = status ? await c.env.DB.prepare(`${sqlText} WHERE f.status=? ORDER BY f.created_at DESC LIMIT 500`).bind(status).all<any>() : await c.env.DB.prepare(`${sqlText} ORDER BY f.created_at DESC LIMIT 500`).all<any>();
   return c.json(result.results.map(row => ({ ...row, hideIdentity: !!row.hideIdentity })));
 });
@@ -240,20 +254,31 @@ app.get('/products/:slug/feedback', async c => {
   return c.json(rows.results.map(row => ({ ...row, customerName: row.hideIdentity ? 'Khách thuê ẩn danh' : row.customerName, hideIdentity: !!row.hideIdentity })));
 });
 app.post('/products/:slug/feedback', async c => {
-  const body = await c.req.json<any>();
   const customer = await customerFromRequest(c);
-  const name = customer?.name || String(body.customerName || '').trim();
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập để gửi feedback.' }, 401);
+  if (!customer.contactReady) return c.json({ message: 'Hãy bổ sung cách liên hệ trước khi gửi feedback.' }, 428);
+  const body = await c.req.json<any>();
+  const name = customer.name;
   const content = String(body.content || '').trim();
-  if (!name || content.length < 5) return c.json({ message: 'Vui lòng nhập tên và nội dung feedback (ít nhất 5 ký tự).' }, 400);
+  if (content.length < 5 || content.length > 2000) return c.json({ message: 'Nội dung feedback cần từ 5 đến 2.000 ký tự.' }, 400);
   const product = await c.env.DB.prepare("SELECT id FROM products WHERE slug=? AND status!='ARCHIVED'").bind(c.req.param('slug')).first<{ id: string }>();
   if (!product) return c.json({ message: 'Không tìm thấy sản phẩm' }, 404);
+  const rentalId = String(body.rentalId || '').trim();
+  if (!rentalId) return c.json({ message: 'Chọn một đơn thuê đã hoàn tất của sản phẩm này.' }, 400);
+  const eligibleRental = await c.env.DB.prepare("SELECT r.id FROM rentals r JOIN rental_items ri ON ri.rental_id=r.id WHERE r.id=? AND lower(r.customer_email)=? AND ri.product_id=? AND r.status='RETURNED'").bind(rentalId, customer.email.toLowerCase(), product.id).first();
+  if (!eligibleRental) return c.json({ message: 'Chỉ có thể feedback sản phẩm thuộc đơn thuê đã hoàn tất của tài khoản này.' }, 403);
+  const existingFeedback = await c.env.DB.prepare('SELECT id FROM product_feedback WHERE rental_id=? AND product_id=?').bind(rentalId, product.id).first();
+  if (existingFeedback) return c.json({ message: 'Bạn đã gửi feedback cho sản phẩm trong đơn thuê này.' }, 409);
   const id = crypto.randomUUID();
   const createdAt = now();
   const imageUrl = String(body.imageUrl || '').trim() || null;
   if (imageUrl && !/^(https?:\/\/|\/[^/])/.test(imageUrl)) return c.json({ message: 'Đường dẫn ảnh không hợp lệ.' }, 400);
-  const email = customer?.email || String(body.customerEmail || '').trim().toLowerCase() || null;
-  const linkedCustomer = customer || (email ? await c.env.DB.prepare('SELECT id FROM customer_accounts WHERE lower(email)=?').bind(email).first<{ id: string }>() : null);
-  await c.env.DB.prepare("INSERT INTO product_feedback (id,product_id,customer_name,customer_email,content,image_url,hide_identity,status,customer_id,created_at) VALUES (?,?,?,?,?,?,?,'PENDING',?,?)").bind(id, product.id, name, email, content, imageUrl, body.hideIdentity ? 1 : 0, linkedCustomer?.id || null, createdAt).run();
+  try {
+    await c.env.DB.prepare("INSERT INTO product_feedback (id,product_id,customer_name,customer_email,content,image_url,hide_identity,status,customer_id,rental_id,created_at) VALUES (?,?,?,?,?,?,?,'PENDING',?,?,?)").bind(id, product.id, name, customer.email, content, imageUrl, body.hideIdentity ? 1 : 0, customer.id, rentalId, createdAt).run();
+  } catch (error) {
+    if (String(error).includes('UNIQUE constraint failed')) return c.json({ message: 'Bạn đã gửi feedback cho sản phẩm trong đơn thuê này.' }, 409);
+    throw error;
+  }
   return c.json({ id, customerName: body.hideIdentity ? 'Khách thuê ẩn danh' : name, content, imageUrl, hideIdentity: !!body.hideIdentity, status: 'PENDING', createdAt }, 201);
 });
 
@@ -365,14 +390,21 @@ app.put('/admin/settings', requireAuth, requireAdmin, async c => {
 });
 app.delete('/admin/settings/:key', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM settings WHERE key=?').bind(c.req.param('key')).run(); return c.json({ ok: true }); });
 
-app.get('/rentals', requireAuth, async c => { const { limit, offset } = parsePage(c); return c.json(await drizzle(c.env.DB).select().from(rentals).orderBy(rentals.startDate).limit(limit).offset(offset)); });
+app.get('/rentals', requireAuth, async c => {
+  const { limit, offset } = parsePage(c);
+  const result = await c.env.DB.prepare('SELECT r.id,r.customer_name customerName,coalesce(r.customer_phone,a.phone) customerPhone,r.customer_email customerEmail,a.facebook_url facebookUrl,r.start_date startDate,r.end_date endDate,r.status,r.deposit,r.total_amount totalAmount,r.note,r.created_at createdAt,r.updated_at updatedAt FROM rentals r LEFT JOIN customer_accounts a ON lower(a.email)=lower(r.customer_email) ORDER BY r.start_date LIMIT ? OFFSET ?').bind(limit, offset).all<any>();
+  return c.json(result.results);
+});
 app.post('/rental-requests', async c => {
+  const customer = await customerFromRequest(c);
+  if (!customer) return c.json({ message: 'Vui lòng đăng nhập bằng Google để gửi yêu cầu thuê.' }, 401);
+  if (!customer.contactReady) return c.json({ message: 'Hãy bổ sung link Facebook hoặc số điện thoại trước khi gửi yêu cầu thuê.' }, 428);
   const body = await c.req.json<any>();
   const product = await c.env.DB.prepare("SELECT id,title,test_price testPrice,fes_price fesPrice,shoot_price shootPrice,total_quantity totalQuantity FROM products WHERE slug=? AND status!='ARCHIVED'").bind(String(body.productSlug || '')).first<any>();
   if (!product) return c.json({ message: 'Không tìm thấy sản phẩm.' }, 404);
-  const customerName = String(body.customerName || '').trim(); const customerEmail = String(body.customerEmail || '').trim().toLowerCase(); const customerPhone = String(body.customerPhone || '').trim();
+  const customerName = customer.name; const customerEmail = customer.email.toLowerCase(); const customerPhone = customer.phone;
   const start = new Date(body.startDate); const end = new Date(body.endDate);
-  if (!customerName || !/^\S+@\S+\.\S+$/.test(customerEmail) || !customerPhone || !Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || end <= start) return c.json({ message: 'Vui lòng nhập tên, email, điện thoại và khoảng ngày thuê hợp lệ.' }, 400);
+  if (!/^\S+@\S+\.\S+$/.test(customerEmail) || !Number.isFinite(start.valueOf()) || !Number.isFinite(end.valueOf()) || end <= start) return c.json({ message: 'Khoảng ngày thuê không hợp lệ.' }, 400);
   const overlap = await c.env.DB.prepare("SELECT coalesce(sum(ri.quantity),0) quantity FROM rental_items ri JOIN rentals r ON r.id=ri.rental_id WHERE ri.product_id=? AND r.status!='CANCELLED' AND r.start_date<? AND r.end_date>?").bind(product.id, end.toISOString(), start.toISOString()).first<{ quantity: number }>();
   if (Number(overlap?.quantity || 0) >= Number(product.totalQuantity || 1)) return c.json({ message: 'Sản phẩm đã có lịch thuê trùng khoảng ngày này. Hãy chọn ngày khác hoặc nhắn shop.' }, 409);
   const type = ['test', 'fes', 'shoot'].includes(body.priceType) ? body.priceType : 'fes';

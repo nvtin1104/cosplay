@@ -35,7 +35,7 @@ Cấu hình tài khoản Cloudflare và `NEXT_PUBLIC_SITE_URL` theo domain web t
 
 ### Tài khoản khách và Google Sign-In
 
-Tài khoản khách dùng bảng `customer_accounts` riêng với tài khoản nhân sự. Khách chỉ đăng nhập bằng Google; hồ sơ được tạo tự động ở lần đăng nhập đầu tiên, không có đăng ký/mật khẩu riêng. Khách có thể lưu link Facebook, gửi yêu cầu thuê từ trang sản phẩm và xem lịch sử thuê theo email. Mỗi yêu cầu mới gắn với email khách nhập; để yêu cầu cũ hiện trong tài khoản, email phải trùng khớp.
+Tài khoản khách dùng bảng `customer_accounts` riêng với tài khoản nhân sự. Khách chỉ đăng nhập bằng Google; hồ sơ được tạo tự động ở lần đăng nhập đầu tiên, không có đăng ký/mật khẩu riêng. Trước khi thuê, đổi điểm hoặc gửi feedback, hồ sơ cần có ít nhất một cách liên hệ: link Facebook hoặc số điện thoại; khách có thể lưu cả hai. Yêu cầu thuê lấy tên, email và điện thoại từ hồ sơ Google đã xác thực. Lịch sử cũ chỉ được đối chiếu theo email Google đã xác minh. Feedback chỉ được gửi cho sản phẩm có trong một đơn của khách ở trạng thái `RETURNED`, và mỗi đơn/sản phẩm chỉ nhận một feedback.
 
 Để bật Google Sign-In local, tạo OAuth 2.0 Web Client trong Google Cloud Console, thêm `http://localhost:3000` vào Authorized JavaScript origins, rồi đặt cùng Client ID vào `web/.env.local` (`NEXT_PUBLIC_GOOGLE_CLIENT_ID=...`) và `api/.dev.vars` (`GOOGLE_CLIENT_ID=...`). Có file mẫu `web/.env.example` và `api/.dev.vars.example`. Khởi động lại web và API sau khi cấu hình. Nếu thiếu Client ID, nút đăng nhập sẽ thông báo chưa cấu hình; đăng nhập khách không khả dụng cho tới khi thêm Client ID hợp lệ.
 

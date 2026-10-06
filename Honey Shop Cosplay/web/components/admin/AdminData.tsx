@@ -470,7 +470,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
                     <tr className="border-b border-neutral-100" key={r.id}>
                       <td className="p-4">
                         <b>{r.customerName}</b>
-                        <p className="text-xs text-neutral-400">{[r.customerPhone, r.customerEmail].filter(Boolean).join(' · ')}</p>
+                        <p className="text-xs text-neutral-400">{[r.customerPhone, r.customerEmail].filter(Boolean).join(' · ')}{r.facebookUrl && <> · <a href={r.facebookUrl} target="_blank" rel="noreferrer" className="text-blue-700 underline">Facebook</a></>}</p>
                       </td>
                       <td>
                         {new Date(r.startDate).toLocaleDateString('vi-VN')} — {new Date(r.endDate).toLocaleDateString('vi-VN')}

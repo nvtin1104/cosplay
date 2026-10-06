@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { ArrowUpRight, Menu, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { GoogleLoginModal } from './GoogleLoginModal';
+import { useCustomerAuth } from './CustomerAuth';
 
 export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: string; logoUrl?: string }) {
   const [open, setOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const { openLogin } = useCustomerAuth();
 
   // Prevent background scroll when mobile menu is open
   useEffect(() => {
@@ -57,7 +57,7 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
 
         {/* Desktop CTA & Mobile Menu Button - Dạng nút vuông vức */}
         <div className="flex items-center gap-3 shrink-0">
-          <button type="button" onClick={() => setLoginOpen(true)} className="hidden md:inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-5 py-2.5 text-sm font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]">
+          <button type="button" onClick={() => openLogin()} className="hidden md:inline-flex items-center gap-2 border-2 border-[#24150e] bg-[#ffe75c] px-5 py-2.5 text-sm font-extrabold text-[#24150e] shadow-[4px_5px_0_#24150e] transition-all hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[5px_6px_0_#24150e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#24150e]">
             <Sparkles size={16} /><span>Đăng nhập</span>
           </button>
 
@@ -123,7 +123,7 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
               </div>
 
               <div className="mt-5 pt-4 border-t-2 border-[#24150e]">
-                <button type="button" onClick={() => { setOpen(false); setLoginOpen(true); }} className="flex w-full items-center justify-center gap-2 border-2 border-[#24150e] bg-[#ff9b35] py-3.5 text-center text-base font-extrabold text-white shadow-[4px_5px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5">
+                <button type="button" onClick={() => { setOpen(false); openLogin(); }} className="flex w-full items-center justify-center gap-2 border-2 border-[#24150e] bg-[#ff9b35] py-3.5 text-center text-base font-extrabold text-white shadow-[4px_5px_0_#24150e] transition-all active:translate-x-0.5 active:translate-y-0.5">
                   <Sparkles size={18} /><span>Đăng nhập</span>
                 </button>
               </div>
@@ -132,7 +132,6 @@ export function PublicHeader({ siteName = 'Honey Shop', logoUrl }: { siteName?: 
         </div>,
         document.body,
       )}
-      <GoogleLoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
   );
 }
