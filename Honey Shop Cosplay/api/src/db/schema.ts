@@ -3,7 +3,7 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 export const products = sqliteTable('products', {
   id: text('id').primaryKey(), slug: text('slug').notNull().unique(), title: text('title').notNull(), description: text('description'),
   testPrice: integer('test_price').notNull().default(0), fesPrice: integer('fes_price').notNull().default(0), shootPrice: integer('shoot_price').notNull().default(0),
-  thumbnailUrl: text('thumbnail_url'), status: text('status').notNull().default('AVAILABLE'), totalQuantity: integer('total_quantity').notNull().default(1),
+  thumbnailUrl: text('thumbnail_url'), thumbnailTemplate: text('thumbnail_template').notNull().default('honey-rizu'), useThumbnailTemplate: integer('use_thumbnail_template', { mode: 'boolean' }).notNull().default(true), status: text('status').notNull().default('AVAILABLE'), totalQuantity: integer('total_quantity').notNull().default(1),
   note: text('note'), location: text('location'), isCombo: integer('is_combo', { mode: 'boolean' }).notNull().default(false), rewardPoints: integer('reward_points').notNull().default(0), pointsPrice: integer('points_price').notNull().default(0), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
 });
 export const productImages = sqliteTable('product_images', { id: text('id').primaryKey(), productId: text('product_id').notNull(), url: text('url').notNull(), alt: text('alt'), kind: text('kind').notNull().default('gallery') });

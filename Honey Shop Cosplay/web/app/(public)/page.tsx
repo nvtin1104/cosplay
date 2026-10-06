@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, Heart, Sparkles } from 'lucide-react';
 import { ProductCard } from '../../components/ProductCard';
+import { ProductThumbnail } from '../../components/ProductThumbnail';
 import { Reveal } from '../../components/Reveal';
 import { getPosts, getProducts, getSettings, getTags } from '../../lib/api';
 
@@ -13,6 +14,7 @@ export default async function HomePage() {
     const tag = tags.find(item => item.id === id);
     return tag ? { tag, products: await getProducts({ tag: tag.slug, limit: 3 }) } : null;
   }));
+  const heroProduct = products.find(product => product.useThumbnailTemplate !== false && product.thumbnailUrl && (product.images || []).filter(image => image.url !== product.thumbnailUrl).length >= 4);
 
   return (
     <main className="overflow-hidden">
@@ -51,20 +53,14 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="relative mx-auto h-[520px] w-full max-w-[520px]">
-            <div className="absolute left-2 top-8 h-[78%] w-[70%] rotate-[-7deg] overflow-hidden border-[3px] border-[#24150e] bg-[#ffe75c] p-3 shadow-[10px_12px_0_#24150e]">
+          <div className="relative mx-auto aspect-square w-full max-w-[640px]">
+            <div className="absolute left-[4%] top-[3%] aspect-[5/7] w-[70%] rotate-[-7deg] overflow-hidden border-[3px] border-[#24150e] bg-[#ffe75c] p-2 shadow-[10px_12px_0_#24150e]">
               <div className="relative h-full w-full overflow-hidden">
-                <Image
-                  src="/assets/production/34.png"
-                  alt="Cosplay lookbook Honey Shop"
-                  fill
-                  priority
-                  className="object-cover"
-                />
+                {heroProduct ? <ProductThumbnail product={heroProduct} className="h-full w-full" /> : <Image src="/assets/production/34.png" alt="Cosplay lookbook Honey Shop" fill priority className="object-contain" />}
               </div>
             </div>
 
-            <div className="float absolute bottom-3 right-0 h-[52%] w-[52%] rotate-[8deg] overflow-hidden rounded-[45%_55%_44%_56%] border-[3px] border-[#24150e] bg-[#fff6dc] p-2 shadow-[8px_9px_0_#24150e]">
+            <div className="float absolute bottom-[2%] right-0 aspect-square w-[46%] rotate-[8deg] overflow-hidden rounded-[45%_55%_44%_56%] border-[3px] border-[#24150e] bg-[#fff6dc] p-2 shadow-[8px_9px_0_#24150e]">
               <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
                 <Image
                   src="/assets/Fb(6).jpg"

@@ -102,7 +102,7 @@ export default async function ProductPage({
               <div className="mt-8">
                 <p className="font-extrabold text-[#24150e]">Size & biến thể:</p>
                 <div className="mt-3 flex flex-wrap gap-2.5">
-                  {product.variants.map((v) => (
+                  {product.variants.filter(v => v.quantity > 0 && ['S', 'M', 'L', 'XL', 'Free size'].includes(v.name)).map((v) => (
                     <span
                       key={v.id}
                       className="border-2 border-[#24150e] bg-white px-4 py-2 text-sm font-extrabold text-[#24150e] shadow-[3px_4px_0_#24150e]"

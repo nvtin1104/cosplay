@@ -9,7 +9,7 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <CustomerAuthProvider>
       <PublicHeader siteName={siteName} logoUrl={settings.logo_url} />
-      <main className="mx-auto w-full max-w-[1440px]">{children}</main>
+      <main className="w-full">{children}</main>
       <footer className="border-t-2 border-[#24150e] bg-[#24150e] py-12 text-[#fff6dc]">
         <div className="header-shell grid gap-8 md:grid-cols-[1.2fr_.8fr]">
           <div>

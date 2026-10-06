@@ -258,6 +258,26 @@ async function attachTaxonomy(DB: D1Database, productId: string, body: any) {
       if (value) stmts.push(DB.prepare("INSERT INTO product_images (id,product_id,url,kind) VALUES (?,?,?,'gallery')").bind(crypto.randomUUID(), productId, value));
     }
   }
+  if (Array.isArray(body.variants)) {
+    const allowedSizes = new Set(['S', 'M', 'L', 'XL', 'Free size']);
+    const variants = body.variants.filter((variant: any) => allowedSizes.has(String(variant.name)));
+    const existing = await DB.prepare('SELECT id,name FROM product_variants WHERE product_id=?').bind(productId).all<{ id: string; name: string }>();
+    const byName = new Map(existing.results.map(variant => [variant.name, variant.id]));
+    const statements: D1PreparedStatement[] = [];
+    for (const variant of variants) {
+      const name = String(variant.name);
+      const quantity = Math.max(0, Math.trunc(Number(variant.quantity) || 0));
+      const id = byName.get(name);
+      if (id) statements.push(DB.prepare('UPDATE product_variants SET quantity=? WHERE id=?').bind(quantity, id));
+      else statements.push(DB.prepare('INSERT INTO product_variants (id,product_id,name,quantity) VALUES (?,?,?,?)').bind(crypto.randomUUID(), productId, name, quantity));
+    }
+    for (const variant of existing.results) {
+      if (allowedSizes.has(variant.name) && !variants.some((value: any) => value.name === variant.name)) {
+        statements.push(DB.prepare('UPDATE product_variants SET quantity=0 WHERE id=?').bind(variant.id));
+      }
+    }
+    if (statements.length) await DB.batch(statements);
+  }
   if (stmts.length) await DB.batch(stmts);
 }
 
@@ -285,7 +305,11 @@ app.get('/products', async c => {
     c.env.DB.prepare(`SELECT pc.product_id productId,c.id,c.name,c.slug,c.parent_id parentId FROM product_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.product_id IN (${marks})`).bind(...ids).all<any>(),
     c.env.DB.prepare(`SELECT pt.product_id productId,t.id,t.name,t.slug FROM product_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.product_id IN (${marks})`).bind(...ids).all<any>(),
   ]);
-  return c.json(items.map(p => ({ ...p, categories: cats.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest), tags: tags.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest) })));
+  const [images, variants] = await Promise.all([
+    c.env.DB.prepare(`SELECT id,product_id productId,url,alt,kind FROM product_images WHERE product_id IN (${marks}) ORDER BY rowid`).bind(...ids).all<any>(),
+    c.env.DB.prepare(`SELECT id,product_id productId,name,quantity,attributes FROM product_variants WHERE product_id IN (${marks}) ORDER BY CASE name WHEN 'S' THEN 1 WHEN 'M' THEN 2 WHEN 'L' THEN 3 WHEN 'XL' THEN 4 WHEN 'Free size' THEN 5 ELSE 6 END,name`).bind(...ids).all<any>(),
+  ]);
+  return c.json(items.map(p => ({ ...p, categories: cats.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest), tags: tags.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest), images: images.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest), variants: variants.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest) })));
 });
 app.get('/admin/products', requireAuth, async c => {
   const { limit, offset } = parsePage(c);
@@ -327,8 +351,8 @@ app.get('/admin/post-categories', requireAuth, async c => {
 });
 app.get('/products/id/:id', requireAuth, async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.id, c.req.param('id')!)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
 app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(and(eq(products.slug, c.req.param('slug')), sql`${products.status} != 'ARCHIVED'`)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
-app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, rewardPoints: Number(body.rewardPoints) || 0, pointsPrice: Number(body.pointsPrice) || 0, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
-app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const { categoryIds, tagIds, comboItems, imageUrls, ...patch } = body; await db.update(products).set({ ...patch, updatedAt: now() }).where(eq(products.id, id)); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy, images] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id), db.select().from(productImages).where(eq(productImages.productId, id))]); return c.json({ ...product, ...taxonomy, images }); });
+app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, thumbnailTemplate: body.thumbnailTemplate || 'honey-rizu', useThumbnailTemplate: body.useThumbnailTemplate !== false, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, rewardPoints: Number(body.rewardPoints) || 0, pointsPrice: Number(body.pointsPrice) || 0, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
+app.patch('/products/:id', requireAuth, async c => { const body = await c.req.json<any>(); const id = c.req.param('id')!; const db = drizzle(c.env.DB); const { categoryIds, tagIds, comboItems, imageUrls, variants, ...patch } = body; await db.update(products).set({ ...patch, updatedAt: now() }).where(eq(products.id, id)); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy, images, sizeVariants] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id), db.select().from(productImages).where(eq(productImages.productId, id)), db.select().from(productVariants).where(eq(productVariants.productId, id))]); return c.json({ ...product, ...taxonomy, images, variants: sizeVariants }); });
 app.delete('/products/:id', requireAuth, requireAdmin, async c => { await drizzle(c.env.DB).update(products).set({ status: 'ARCHIVED', updatedAt: now() }).where(eq(products.id, c.req.param('id')!)); return c.json({ ok: true }); });
 
 app.get('/products/:slug/feedback', async c => {

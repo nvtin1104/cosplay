@@ -8,6 +8,8 @@ CREATE TABLE products (
   fes_price INTEGER NOT NULL DEFAULT 0,
   shoot_price INTEGER NOT NULL DEFAULT 0,
   thumbnail_url TEXT,
+  thumbnail_template TEXT NOT NULL DEFAULT 'honey-rizu',
+  use_thumbnail_template INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'AVAILABLE',
   total_quantity INTEGER NOT NULL DEFAULT 1,
   note TEXT,
@@ -92,7 +94,8 @@ CREATE TABLE rentals (
   customer_phone TEXT,
   start_date TEXT NOT NULL,
   end_date TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'HOLD',
+  status TEXT NOT NULL DEFAULT 'NEW',
+  processing_status TEXT NOT NULL DEFAULT 'WAITING_FOR_PAYMENT',
   deposit INTEGER NOT NULL DEFAULT 0,
   total_amount INTEGER NOT NULL DEFAULT 0,
   note TEXT,
@@ -162,6 +165,7 @@ CREATE TABLE customer_accounts (
   password_hash TEXT,
   password_salt TEXT,
   facebook_url TEXT,
+  phone TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1
@@ -183,7 +187,8 @@ CREATE TABLE product_feedback (
   hide_identity INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   customer_id TEXT REFERENCES customer_accounts(id) ON DELETE SET NULL,
-  status TEXT NOT NULL DEFAULT 'APPROVED'
+  status TEXT NOT NULL DEFAULT 'APPROVED',
+  rental_id TEXT REFERENCES rentals(id) ON DELETE SET NULL
 );
 CREATE TABLE loyalty_transactions (
   id TEXT PRIMARY KEY,
@@ -194,6 +199,27 @@ CREATE TABLE loyalty_transactions (
   points_delta INTEGER NOT NULL,
   note TEXT,
   created_by TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE rental_status_history (
+  id TEXT PRIMARY KEY,
+  rental_id TEXT NOT NULL REFERENCES rentals(id) ON DELETE CASCADE,
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  from_processing_status TEXT,
+  to_processing_status TEXT NOT NULL,
+  actor_id TEXT,
+  actor_name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE rental_payment_transactions (
+  id TEXT PRIMARY KEY,
+  rental_id TEXT NOT NULL REFERENCES rentals(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('DEPOSIT', 'BALANCE', 'DEPOSIT_REFUND')),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  note TEXT,
+  actor_id TEXT,
+  actor_name TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 CREATE INDEX rentals_dates_idx ON rentals(start_date, end_date);
@@ -212,6 +238,11 @@ CREATE INDEX customer_sessions_token_idx ON customer_sessions(token_hash);
 CREATE INDEX rentals_customer_email_idx ON rentals(customer_email);
 CREATE INDEX loyalty_transactions_customer_created_idx ON loyalty_transactions(customer_id, created_at DESC);
 CREATE INDEX product_feedback_status_created_idx ON product_feedback(status, created_at DESC);
+CREATE UNIQUE INDEX product_feedback_rental_product_unique_idx
+  ON product_feedback(rental_id, product_id)
+  WHERE rental_id IS NOT NULL;
+CREATE INDEX rental_status_history_rental_idx ON rental_status_history(rental_id, created_at DESC);
+CREATE INDEX rental_payment_transactions_rental_idx ON rental_payment_transactions(rental_id, created_at DESC);
 CREATE TRIGGER loyalty_balance_nonnegative
 BEFORE INSERT ON loyalty_transactions
 WHEN NEW.event_type IN ('REDEEM','ADJUST')

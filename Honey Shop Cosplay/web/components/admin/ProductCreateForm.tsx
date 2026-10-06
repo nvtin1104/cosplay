@@ -13,6 +13,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { AdminButton, AdminInput, AdminSelect, AdminTextarea } from './AdminUI';
+import { ProductThumbnail, thumbnailTemplates } from '../ProductThumbnail';
+import type { Product } from '../../lib/types';
 
 function slugify(text: string): string {
   return text
@@ -43,12 +45,13 @@ type TagItem = { id: string; name: string; slug: string };
 type SimpleProduct = { id: string; title: string; thumbnailUrl?: string; isCombo?: boolean; testPrice: number };
 
 type EditableProduct = {
-  id: string; title: string; slug: string; description?: string;
+  id: string; title: string; slug: string; description?: string; note?: string; location?: string; thumbnailTemplate?: string; useThumbnailTemplate?: boolean;
   testPrice: number; fesPrice: number; shootPrice: number; totalQuantity: number;
   status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'ARCHIVED'; isCombo?: boolean;
   rewardPoints?: number; pointsPrice?: number;
   thumbnailUrl?: string;
   images?: { url: string; alt?: string }[];
+  variants?: { id: string; name: string; quantity: number }[];
   categories?: Category[]; tags?: TagItem[]; comboItems?: { productId: string; quantity: number }[];
 };
 
@@ -105,6 +108,10 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   const [slug, setSlug] = useState(product?.slug || '');
   const [isSlugCustom, setIsSlugCustom] = useState(isEdit);
   const [description, setDescription] = useState(product?.description || '');
+  const [note, setNote] = useState(product?.note || '');
+  const [location, setLocation] = useState(product?.location || 'HCM');
+  const [thumbnailTemplate, setThumbnailTemplate] = useState(product?.thumbnailTemplate || 'honey-rizu');
+  const [useThumbnailTemplate, setUseThumbnailTemplate] = useState(product?.useThumbnailTemplate !== false);
   const [testPrice, setTestPrice] = useState<number | string>(product?.testPrice ?? 120000);
   const [fesPrice, setFesPrice] = useState<number | string>(product?.fesPrice ?? 250000);
   const [shootPrice, setShootPrice] = useState<number | string>(product?.shootPrice ?? 180000);
@@ -114,6 +121,8 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
   const [isCombo, setIsCombo] = useState(!!product?.isCombo);
   const [thumbnailUrl, setThumbnailUrl] = useState(product?.thumbnailUrl || '');
   const [imageUrls, setImageUrls] = useState<string[]>(product?.images?.map((image) => image.url) || []);
+  const sizeOptions = ['S', 'M', 'L', 'XL', 'Free size'];
+  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>(() => Object.fromEntries((product?.variants || []).filter(variant => sizeOptions.includes(variant.name) && variant.quantity > 0).map(variant => [variant.name, variant.quantity])));
   const [uploading, setUploading] = useState(false);
 
   // Taxonomy states
@@ -207,7 +216,14 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
     setComboItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity: Math.max(1, quantity) } : i)));
   }
 
-  async function handleFileUpload(file: File) {
+  const previewProduct: Partial<Product> = {
+    title, description, note, location, thumbnailUrl, thumbnailTemplate, useThumbnailTemplate,
+    testPrice: Number(testPrice) || 0, fesPrice: Number(fesPrice) || 0, shootPrice: Number(shootPrice) || 0,
+    images: imageUrls.map(url => ({ url })),
+    variants: sizeOptions.filter(size => sizeQuantities[size] > 0).map((name, index) => ({ id: name || String(index), name, quantity: sizeQuantities[name] })),
+  };
+
+  async function handleFileUpload(file: File, asThumbnail = true) {
     setUploading(true);
     setError('');
     try {
@@ -216,8 +232,8 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
       const response = await fetch('/api/v1/admin/uploads', { method: 'POST', credentials: 'include', body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Tải ảnh lên thất bại.');
-      setThumbnailUrl(data.url);
-      setImageUrls((previous) => previous.includes(data.url) ? previous : [...previous, data.url]);
+      if (asThumbnail) setThumbnailUrl(data.url);
+      else setImageUrls((previous) => previous.includes(data.url) ? previous : [...previous, data.url]);
     } catch (e: any) {
       setError(e.message || 'Tải ảnh lên thất bại.');
     } finally {
@@ -248,6 +264,10 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
             title: title.trim(),
             slug: finalSlug,
             description: description.trim(),
+            note: note.trim(),
+            location: location.trim(),
+            thumbnailTemplate,
+            useThumbnailTemplate,
             testPrice: Number(testPrice) || 0,
             fesPrice: Number(fesPrice) || 0,
             shootPrice: Number(shootPrice) || 0,
@@ -258,6 +278,7 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
             isCombo,
             thumbnailUrl: thumbnailUrl.trim(),
             imageUrls,
+            variants: sizeOptions.filter(size => sizeQuantities[size] > 0).map(name => ({ name, quantity: sizeQuantities[name] })),
             categoryIds: selectedCategoryIds,
             tagIds: selectedTagIds,
             comboItems: isCombo ? comboItems : [],
@@ -375,6 +396,11 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                 />
               </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div><label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">Đồ kèm / lưu ý hiển thị</label><AdminInput value={note} onChange={e => setNote(e.target.value)} placeholder="Ví dụ: Full costume, wig, phụ kiện" className="mt-1" /></div>
+                <div><label className="block text-xs font-bold uppercase tracking-wider text-neutral-500">Vị trí đồ</label><AdminInput value={location} onChange={e => setLocation(e.target.value)} placeholder="HCM" className="mt-1" /></div>
+              </div>
+
               <div className="pt-2">
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 p-3 hover:bg-neutral-50 transition-colors">
                   <input
@@ -453,6 +479,21 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
                   <p className="mt-1 text-xs font-medium text-emerald-600">{formatVnd(value)}</p>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="admin-card p-6">
+            <h2 className="text-base font-bold">Size và số lượng</h2>
+            <p className="mt-1 text-xs text-neutral-500">Chọn các size đang có để hiển thị trên thumbnail.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {sizeOptions.map(size => {
+                const selected = sizeQuantities[size] !== undefined;
+                return <div key={size} className={`flex items-center gap-3 rounded-xl border p-3 ${selected ? 'border-amber-300 bg-amber-50' : 'border-neutral-200'}`}>
+                  <input type="checkbox" checked={selected} onChange={event => setSizeQuantities(previous => { const next = { ...previous }; if (event.target.checked) next[size] = 1; else delete next[size]; return next; })} className="h-4 w-4 rounded border-neutral-300 text-black" />
+                  <span className="min-w-0 flex-1 text-sm font-bold">{size}</span>
+                  {selected && <AdminInput type="number" min="1" value={sizeQuantities[size]} onChange={event => setSizeQuantities(previous => ({ ...previous, [size]: Math.max(1, Number(event.target.value) || 1) }))} className="!mt-0 w-20" aria-label={`Số lượng size ${size}`} />}
+                </div>;
+              })}
             </div>
           </div>
 
@@ -547,72 +588,24 @@ export function ProductCreateForm({ product }: { product?: EditableProduct }) {
             </p>
           </div>
 
-          {/* Thumbnail & Image Preview */}
+          {/* Thumbnail template and live preview */}
           <div className="admin-card p-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-500 flex items-center justify-between">
-              <span>Hình ảnh đại diện</span>
-              <ImageIcon size={16} className="text-neutral-400" />
-            </h3>
+            <h3 className="flex items-center justify-between text-sm font-bold uppercase tracking-wider text-neutral-500"><span>Template thumbnail</span><ImageIcon size={16} className="text-neutral-400" /></h3>
+            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-3 hover:bg-neutral-50"><input type="checkbox" checked={useThumbnailTemplate} onChange={event => setUseThumbnailTemplate(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-black" /><span><b className="block text-sm text-neutral-800">Dùng template cho thumbnail</b><span className="mt-1 block text-xs text-neutral-500">Tắt nếu chỉ muốn dùng ảnh chính, không ghép thông tin lên thumbnail.</span></span></label>
+            {useThumbnailTemplate && <div className="mt-3"><label className="block text-xs font-bold text-neutral-600">Mã template</label><AdminSelect ariaLabel="Template thumbnail" value={thumbnailTemplate} onChange={setThumbnailTemplate} searchable={false} allowEmpty={false} options={thumbnailTemplates.map(({ value, label }) => ({ value, label }))} /><p className="mt-1 text-xs text-neutral-500">Các template có bố cục và màu khác nhau. Ô ảnh trống hiện Coming Soon.</p></div>}
 
-            <div className="mt-3">
-              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-300 py-4 text-sm font-semibold text-neutral-600 hover:border-black hover:text-black transition-colors">
-                {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                {uploading ? 'Đang tải lên…' : 'Tải ảnh lên'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={uploading}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void handleFileUpload(file);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-neutral-600">Hoặc nhập URL ảnh (link ngoài)</label>
-              <AdminInput
-                type="text"
-                value={thumbnailUrl}
-                onChange={(e) => setThumbnailUrl(e.target.value)}
-                placeholder="https://... hoặc /assets/..."
-                className="mt-1 font-mono text-xs"
-              />
-            </div>
-
-            {/* Live Preview Box */}
-            <div className="mt-4">
-              <span className="text-xs font-semibold text-neutral-500">Xem trước:</span>
-              <div className="mt-1 relative aspect-[3/4] w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 flex items-center justify-center">
-                {thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={thumbnailUrl}
-                    alt="Preview"
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <div className="text-center p-4 text-neutral-400">
-                    <ImageIcon size={32} className="mx-auto mb-1 opacity-50" />
-                    <p className="text-xs">Chưa có ảnh</p>
-                  </div>
-                )}
-              </div>
+            <div className="mt-4"><p className="text-xs font-bold text-neutral-600">Ảnh chính</p><label className="mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-300 py-3 text-sm font-semibold text-neutral-600 transition-colors hover:border-black hover:text-black">{uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}{uploading ? 'Đang tải lên…' : 'Tải ảnh chính lên'}<input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) void handleFileUpload(file, true); event.currentTarget.value = ''; }} /></label>
+              <AdminInput type="text" value={thumbnailUrl} onChange={event => setThumbnailUrl(event.target.value)} placeholder="Hoặc nhập URL ảnh chính" className="mt-2 font-mono text-xs" />
             </div>
 
             <div className="mt-5 border-t border-neutral-100 pt-4">
               <div className="flex items-center justify-between gap-3">
-                <div><h4 className="text-sm font-bold text-neutral-800">Danh sách ảnh</h4><p className="mt-1 text-xs text-neutral-500">Ảnh bổ sung sẽ hiển thị trong chi tiết sản phẩm.</p></div>
-                <label className="shrink-0 cursor-pointer rounded-lg border border-neutral-200 px-3 py-2 text-xs font-bold hover:border-amber-400 hover:bg-amber-50">+ Thêm ảnh<input type="file" accept="image/*" multiple className="sr-only" disabled={uploading} onChange={async (e) => { const input = e.currentTarget; const files = Array.from(input.files || []); for (const file of files) await handleFileUpload(file); input.value = ''; }} /></label>
+                <div><h4 className="text-sm font-bold text-neutral-800">Ảnh phụ · {new Set(imageUrls.filter(url => url !== thumbnailUrl)).size}/4</h4><p className="mt-1 text-xs text-neutral-500">Ô ảnh trống sẽ hiện Coming Soon trong thumbnail.</p></div>
+                <label className="shrink-0 cursor-pointer rounded-lg border border-neutral-200 px-3 py-2 text-xs font-bold hover:border-amber-400 hover:bg-amber-50">+ Thêm ảnh<input type="file" accept="image/*" multiple className="sr-only" disabled={uploading} onChange={async (event) => { const input = event.currentTarget; const files = Array.from(input.files || []); for (const file of files) await handleFileUpload(file, false); input.value = ''; }} /></label>
               </div>
-              {imageUrls.length ? <div className="mt-3 grid grid-cols-3 gap-2">{imageUrls.map((url, index) => <div key={`${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"><img src={url} alt={`Ảnh sản phẩm ${index + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setImageUrls((previous) => previous.filter((_, imageIndex) => imageIndex !== index))} aria-label={`Xóa ảnh ${index + 1}`} className="absolute right-1 top-1 rounded-full bg-black/75 p-1.5 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"><span className="sr-only">Xóa ảnh</span>×</button></div>)}</div> : <p className="mt-3 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-500">Chưa có ảnh bổ sung.</p>}
+              {imageUrls.length ? <div className="mt-3 grid grid-cols-4 gap-2">{imageUrls.map((url, index) => <div key={`${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50"><img src={url} alt={`Ảnh phụ ${index + 1}`} className="h-full w-full object-cover" /><button type="button" onClick={() => setImageUrls((previous) => previous.filter((_, imageIndex) => imageIndex !== index))} aria-label={`Xóa ảnh phụ ${index + 1}`} className="absolute right-1 top-1 rounded-full bg-black/75 p-1.5 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">×</button></div>)}</div> : <p className="mt-3 rounded-xl bg-neutral-50 p-3 text-xs text-neutral-500">Chưa có ảnh phụ.</p>}
             </div>
+            <div className="mt-5"><span className="text-xs font-semibold text-neutral-500">Xem trước template:</span><div className="mx-auto mt-2 max-w-sm"><ProductThumbnail product={previewProduct} /></div></div>
           </div>
 
           {/* Action Card */}
