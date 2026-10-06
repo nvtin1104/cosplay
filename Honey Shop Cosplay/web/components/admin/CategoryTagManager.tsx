@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import type { AuthUser, Category, ProductTag } from '../../lib/types';
 import { AdminButton, AdminInput, AdminSelect } from './AdminUI';
+import { AdminDataTable, useAdminPagedList, updateAdminTableFilter, type AdminDataTableColumn } from './AdminDataTable';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -1333,26 +1334,11 @@ export function CategoryManager() {
 export function TagManager() {
   const user = useCurrentUser();
   const isAdmin = user?.role === 'ADMIN';
-  const [items, setItems] = useState<ProductTag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const { rows: items, loading, loadingMore, hasMore, error, setError, loadMore, reload } = useAdminPagedList<ProductTag>('/admin/tags', filters);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState('');
   const [editingName, setEditingName] = useState('');
-
-  const load = () => {
-    return api<ProductTag[]>('/tags')
-      .then((data) => {
-        setItems(data);
-        setError('');
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   async function addTag(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1360,7 +1346,7 @@ export function TagManager() {
     try {
       await api('/tags', { method: 'POST', body: JSON.stringify({ name: newName.trim() }) });
       setNewName('');
-      void load();
+      reload();
     } catch (e: any) {
       setError(e.message);
     }
@@ -1371,7 +1357,7 @@ export function TagManager() {
     try {
       await api(`/tags/${id}`, { method: 'PATCH', body: JSON.stringify({ name: editingName.trim() }) });
       setEditingId('');
-      void load();
+      reload();
     } catch (e: any) {
       setError(e.message);
     }
@@ -1381,73 +1367,30 @@ export function TagManager() {
     if (!confirm('Xóa tag này? Tag sẽ được gỡ khỏi toàn bộ sản phẩm đang gắn.')) return;
     try {
       await api(`/tags/${id}`, { method: 'DELETE' });
-      void load();
+      reload();
     } catch (e: any) {
       setError(e.message);
     }
   }
 
   return (
-    <div className="space-y-5">
+    <div>
       <ErrorBanner message={error} />
-      <form onSubmit={addTag} className="admin-card flex flex-wrap items-center gap-3 p-5">
+      <form onSubmit={addTag} className="flex min-h-11 flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-2 py-1">
         <AdminInput
-          className="max-w-xs flex-1"
+          className="!min-h-9 h-9 max-w-xs flex-1 !rounded-md !py-1.5"
           placeholder="Tag mới, VD: Đồ mới, Sale, Hot"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
-        <AdminButton>+ Thêm tag</AdminButton>
+        <AdminButton className="h-9 rounded-md px-3 py-1.5 text-xs">+ Thêm tag</AdminButton>
       </form>
 
-      <div className="admin-card overflow-hidden">
-        {loading ? (
-          <p className="p-5 text-sm text-neutral-500">Đang tải…</p>
-        ) : items.length === 0 ? (
-          <p className="p-5 text-sm text-neutral-400">Chưa có tag nào.</p>
-        ) : (
-          items.map((tag) => (
-            <div key={tag.id} className="flex items-center justify-between gap-3 border-b border-neutral-100 p-4 last:border-0">
-              {editingId === tag.id ? (
-                <>
-                  <AdminInput
-                    className="flex-1 py-1.5 text-sm"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    autoFocus
-                  />
-                  <button onClick={() => rename(tag.id)} className="text-emerald-600 hover:text-emerald-700">
-                    <Check size={16} />
-                  </button>
-                  <button onClick={() => setEditingId('')} className="text-neutral-400 hover:text-neutral-600">
-                    <X size={16} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm font-medium">{tag.name}</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        setEditingId(tag.id);
-                        setEditingName(tag.name);
-                      }}
-                      className="text-neutral-400 hover:text-black"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    {isAdmin && (
-                      <button onClick={() => remove(tag.id)} className="text-neutral-400 hover:text-red-600">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+      <AdminDataTable columns={[
+        { key: 'name', header: 'Tên tag', className: 'min-w-[220px]', render: tag => editingId === tag.id ? <div className="flex items-center gap-2"><AdminInput className="!min-h-8 py-1.5 text-sm" value={editingName} onChange={event => setEditingName(event.target.value)} autoFocus /><button type="button" onClick={() => void rename(tag.id)} className="text-emerald-600 hover:text-emerald-700"><Check size={16} /></button><button type="button" onClick={() => setEditingId('')} className="text-neutral-400 hover:text-neutral-600"><X size={16} /></button></div> : <span className="font-medium text-neutral-900">{tag.name}</span> },
+        { key: 'slug', header: 'Slug', className: 'min-w-[180px] text-xs text-neutral-500', render: tag => tag.slug },
+        { key: 'actions', header: 'Thao tác', className: 'min-w-[100px] text-right', headerClassName: 'text-right', render: tag => editingId !== tag.id && <div className="inline-flex items-center gap-3"><button type="button" onClick={() => { setEditingId(tag.id); setEditingName(tag.name); }} aria-label={`Sửa ${tag.name}`} className="text-neutral-400 hover:text-black"><Pencil size={14} /></button>{isAdmin && <button type="button" onClick={() => void remove(tag.id)} aria-label={`Xóa ${tag.name}`} className="text-neutral-400 hover:text-red-600"><Trash2 size={14} /></button>}</div> },
+      ] as AdminDataTableColumn<ProductTag>[]} rows={items} loading={loading} loadingMore={loadingMore} hasMore={hasMore} onLoadMore={loadMore} error={error} filters={filters} onFilterChange={(key, value) => setFilters(current => updateAdminTableFilter(current, key, value))} searchPlaceholder="Tìm tag theo tên hoặc slug…" minWidth="580px" emptyMessage="Chưa có tag phù hợp." />
     </div>
   );
 }

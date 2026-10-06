@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bold, BookOpen, ExternalLink, Eye, EyeOff, FileText, FolderOpen, GripVertical, ImagePlus, Italic, Link2, List, ListOrdered, Pencil, Quote, Redo2, Trash2, Undo2, X } from 'lucide-react';
+import { Bold, BookOpen, ExternalLink, Eye, EyeOff, FolderOpen, GripVertical, ImagePlus, Italic, Link2, List, ListOrdered, Pencil, Quote, Redo2, Trash2, Undo2, X } from 'lucide-react';
 import type { Post, PostCategory } from '../../lib/types';
 import { AdminButton, AdminField, AdminInput, AdminSelect, AdminStatusBadge, AdminTextarea } from './AdminUI';
+import { AdminDataTable, useAdminPagedList, updateAdminTableFilter, type AdminDataTableColumn } from './AdminDataTable';
 
 type Kind = 'ARTICLE' | 'GUIDE';
 const slugify = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -17,7 +18,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function ContentManager({ type, editorOnly = false, editId }: { type: Kind; editorOnly?: boolean; editId?: string }) {
   const router = useRouter();
-  const [items, setItems] = useState<Post[]>([]);
+  const [guideItems, setGuideItems] = useState<Post[]>([]);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const { rows: articleItems, loading: tableLoading, loadingMore, hasMore, error: tableError, loadMore, reload } = useAdminPagedList<Post>('/admin/posts', { ...filters, type: 'ARTICLE', summary: '1' }, 30, !editorOnly && type === 'ARTICLE');
+  const items = type === 'ARTICLE' ? articleItems : guideItems;
   const [categories, setCategories] = useState<PostCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,10 +45,10 @@ export function ContentManager({ type, editorOnly = false, editId }: { type: Kin
   async function load() {
     try {
       const [posts, cats] = await Promise.all([
-        api<Post[]>(`/admin/posts?type=${type}&limit=5000`),
+        type === 'GUIDE' || editorOnly ? api<Post[]>(`/admin/posts?type=${type}&limit=5000`) : Promise.resolve([] as Post[]),
         api<PostCategory[]>('/post-categories'),
       ]);
-      setItems(posts);
+      setGuideItems(posts);
       setCategories(cats);
       let missingEdit = false;
       if (editorOnly && editId) {
@@ -88,12 +92,12 @@ export function ContentManager({ type, editorOnly = false, editId }: { type: Kin
   }
 
   async function setStatus(post: Post, status: 'DRAFT' | 'PUBLISHED') {
-    try { await api(`/posts/${post.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); await load(); }
+      try { await api(`/posts/${post.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); if (type === 'ARTICLE') reload(); else await load(); }
     catch (e) { setError((e as Error).message); }
   }
   async function remove(post: Post) {
     if (!confirm(`Xóa ${post.title}?`)) return;
-    try { await api(`/posts/${post.id}`, { method: 'DELETE' }); await load(); }
+    try { await api(`/posts/${post.id}`, { method: 'DELETE' }); if (type === 'ARTICLE') reload(); else await load(); }
     catch (e) { setError((e as Error).message); }
   }
   async function upload(file: File, insert: boolean) {
@@ -110,10 +114,10 @@ export function ContentManager({ type, editorOnly = false, editId }: { type: Kin
   function insertLink() { const url = prompt('Nhập địa chỉ liên kết'); if (url) format('createLink', url); }
   function onCoverDrop(event: DragEvent<HTMLDivElement>) { event.preventDefault(); const file = event.dataTransfer.files?.[0]; if (file?.type.startsWith('image/')) void upload(file, false); }
   async function persistOrder(reordered: Post[]) {
-    const previous = items;
-    setItems(reordered.map((post, index) => ({ ...post, sortIndex: index + 1 })));
+    const previous = guideItems;
+    setGuideItems(reordered.map((post, index) => ({ ...post, sortIndex: index + 1 })));
     try { await api('/admin/guides/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: reordered.map(p => p.id) }) }); }
-    catch (e) { setError((e as Error).message); setItems(previous); }
+    catch (e) { setError((e as Error).message); setGuideItems(previous); }
     finally { setDragId(null); }
   }
   async function reorder(targetId: string) {
@@ -127,11 +131,11 @@ export function ContentManager({ type, editorOnly = false, editId }: { type: Kin
   }
   async function moveBy(id: string, direction: number) { const index = items.findIndex(post => post.id === id); const target = index + direction; if (target < 0 || target >= items.length) return; const next = [...items]; [next[index], next[target]] = [next[target], next[index]]; await persistOrder(next); }
 
-  return <div className="space-y-4">
-    {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>}
-    {!editorOnly && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-      <p className="text-sm font-medium text-neutral-500">{loading ? 'Đang tải nội dung…' : <><span className="font-bold text-neutral-900">{items.length}</span> {type === 'GUIDE' ? 'hướng dẫn' : 'bài viết'}</>}</p>
-      <AdminButton onClick={() => router.push(`${type === 'GUIDE' ? '/admin/guides' : '/admin/posts'}/new`)}>+ Tạo {type === 'GUIDE' ? 'hướng dẫn' : 'bài viết'}</AdminButton>
+  return <div className="space-y-2">
+    {(error || tableError) && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error || tableError}</p>}
+    {!editorOnly && <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-white px-3 py-1.5">
+      <p className="text-sm font-medium text-neutral-500">{(type === 'ARTICLE' ? tableLoading : loading) ? 'Đang tải nội dung…' : <><span className="font-bold text-neutral-900">{items.length}</span> {type === 'GUIDE' ? 'hướng dẫn' : 'bài viết đã tải'}</>}</p>
+      <AdminButton className="rounded-md px-3 py-2 text-xs" onClick={() => router.push(`${type === 'GUIDE' ? '/admin/guides' : '/admin/posts'}/new`)}>+ Tạo {type === 'GUIDE' ? 'hướng dẫn' : 'bài viết'}</AdminButton>
     </div>}
     {open && <form onSubmit={save} className="admin-card overflow-hidden">
       <div className="flex items-start justify-between gap-4 border-b border-neutral-100 bg-gradient-to-r from-amber-50 to-white px-4 py-4 sm:px-5">
@@ -179,13 +183,17 @@ export function ContentManager({ type, editorOnly = false, editId }: { type: Kin
         <div className="flex flex-col-reverse justify-end gap-2 border-t border-neutral-100 pt-3 sm:flex-row"><AdminButton type="button" variant="secondary" onClick={() => router.push(type === 'GUIDE' ? '/admin/guides' : '/admin/posts')}>Hủy</AdminButton><AdminButton disabled={saving || uploading}>{saving ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu bản nháp'}</AdminButton></div>
       </div>
     </form>}
-    {!editorOnly && items.length === 0 && !loading ? <div className="admin-card px-6 py-12 text-center"><p className="text-lg font-bold">Chưa có {type === 'GUIDE' ? 'hướng dẫn' : 'bài viết'} nào</p><p className="mt-1 text-sm text-neutral-500">Tạo nội dung đầu tiên để bắt đầu xây dựng thư viện của bạn.</p><button onClick={() => router.push(`${type === 'GUIDE' ? '/admin/guides' : '/admin/posts'}/new`)} className="mt-4 rounded-xl border border-neutral-200 px-4 py-2 text-sm font-bold hover:border-amber-400 hover:bg-amber-50">+ Tạo {type === 'GUIDE' ? 'hướng dẫn' : 'bài viết'}</button></div> : null}
-    {!editorOnly && <div className="space-y-3">{items.map(post => <article key={post.id} draggable={type === 'GUIDE'} onDragStart={() => setDragId(post.id)} onDragOver={e => { if (type === 'GUIDE') e.preventDefault(); }} onDrop={() => { if (type === 'GUIDE') void reorder(post.id); }} onDragEnd={() => setDragId(null)} className={`group relative flex flex-wrap items-center gap-4 overflow-hidden rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-4 ${post.status === 'PUBLISHED' ? 'border-emerald-100 hover:border-emerald-200' : 'border-neutral-200 hover:border-amber-200'} ${dragId === post.id ? 'opacity-50' : ''}`}>
+    {!editorOnly && type === 'ARTICLE' && <AdminDataTable columns={[
+      { key: 'title', header: 'Bài viết', className: 'min-w-[260px]', render: post => <div className="flex items-center gap-2.5">{post.coverUrl ? <img loading="lazy" src={post.coverUrl} alt="" className="h-9 w-12 shrink-0 rounded border border-neutral-200 object-cover" /> : <div className="h-9 w-12 shrink-0 rounded border border-neutral-200 bg-amber-50" />}<span className="font-semibold text-neutral-900">{post.title}</span></div> },
+      { key: 'slug', header: 'Slug', className: 'min-w-[150px] max-w-[230px] truncate text-xs', render: post => post.slug },
+      { key: 'category', header: 'Danh mục', className: 'min-w-[140px]', render: post => post.categoryName || <span className="text-neutral-400">Chưa phân loại</span> },
+      { key: 'status', header: 'Trạng thái', filter: { key: 'status', label: 'trạng thái', type: 'select', options: [{ value: 'PUBLISHED', label: 'Đã xuất bản' }, { value: 'DRAFT', label: 'Bản nháp' }] }, className: 'min-w-[125px]', render: post => <AdminStatusBadge published={post.status === 'PUBLISHED'}>{post.status === 'PUBLISHED' ? 'Đã xuất bản' : 'Bản nháp'}</AdminStatusBadge> },
+      { key: 'date', header: 'Ngày tạo', filter: { key: 'date', label: 'ngày tạo', type: 'date' }, className: 'min-w-[115px] whitespace-nowrap text-xs', render: post => post.createdAt ? new Date(post.createdAt).toLocaleDateString('vi-VN') : '—' },
+      { key: 'actions', header: 'Thao tác', className: 'min-w-[155px]', render: post => <div className="flex items-center gap-2 whitespace-nowrap"><a href={`/blog/${post.slug}`} target="_blank" rel="noreferrer" title="Mở trang" className="text-neutral-500 hover:text-sky-700"><ExternalLink size={14} /></a><button type="button" onClick={() => router.push(`/admin/posts/edit/${post.id}`)} className="text-xs font-semibold text-neutral-600 hover:text-black">Sửa</button>{isAdmin && <><button type="button" onClick={() => void setStatus(post, post.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED')} className="text-xs font-semibold text-emerald-700">{post.status === 'PUBLISHED' ? 'Gỡ đăng' : 'Xuất bản'}</button><button type="button" onClick={() => void remove(post)} className="text-xs font-semibold text-red-600">Xóa</button></>}</div> },
+    ] as AdminDataTableColumn<Post>[]} rows={articleItems} loading={tableLoading} loadingMore={loadingMore} hasMore={hasMore} onLoadMore={loadMore} error={tableError} filters={filters} onFilterChange={(key, value) => setFilters(current => updateAdminTableFilter(current, key, value))} searchPlaceholder="Tìm bài viết theo tiêu đề, slug hoặc danh mục…" minWidth="1050px" emptyMessage="Chưa có bài viết phù hợp." />}
+    {!editorOnly && type === 'GUIDE' && items.length === 0 && !loading ? <div className="admin-card px-6 py-12 text-center"><p className="text-lg font-bold">Chưa có hướng dẫn nào</p><p className="mt-1 text-sm text-neutral-500">Tạo nội dung đầu tiên để bắt đầu xây dựng thư viện của bạn.</p><button onClick={() => router.push('/admin/guides/new')} className="mt-4 rounded-xl border border-neutral-200 px-4 py-2 text-sm font-bold hover:border-amber-400 hover:bg-amber-50">+ Tạo hướng dẫn</button></div> : null}
+    {!editorOnly && type === 'GUIDE' && <div className="space-y-3">{items.map(post => <article key={post.id} draggable onDragStart={() => setDragId(post.id)} onDragOver={e => e.preventDefault()} onDrop={() => void reorder(post.id)} onDragEnd={() => setDragId(null)} className={`group relative flex flex-wrap items-center gap-4 overflow-hidden rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-4 ${post.status === 'PUBLISHED' ? 'border-emerald-100 hover:border-emerald-200' : 'border-neutral-200 hover:border-amber-200'} ${dragId === post.id ? 'opacity-50' : ''}`}>
       {type === 'GUIDE' && <div className="flex items-center gap-1 rounded-xl bg-neutral-50 px-2 py-2 text-xs font-bold text-neutral-500" title="Kéo để sắp xếp"><GripVertical size={16} className="cursor-grab" /><span>{post.sortIndex || '—'}</span><button type="button" onClick={() => void moveBy(post.id, -1)} aria-label={`Đưa ${post.title} lên`} className="rounded p-1 hover:bg-white hover:text-black">↑</button><button type="button" onClick={() => void moveBy(post.id, 1)} aria-label={`Đưa ${post.title} xuống`} className="rounded p-1 hover:bg-white hover:text-black">↓</button></div>}
-      {type === 'ARTICLE' && <div className="relative grid h-[76px] w-[112px] shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-amber-100 via-orange-50 to-rose-100 text-amber-800 sm:h-[88px] sm:w-[132px]">
-        {post.coverUrl ? <img src={post.coverUrl} alt="" className="h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : <FileText size={27} />}
-        <span className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
-      </div>}
       <div className="min-w-0 flex-1 basis-[220px]">
         <div className="flex flex-wrap items-center gap-2"><h3 className="min-w-0 truncate text-base font-extrabold text-neutral-900 sm:text-lg">{post.title}</h3><AdminStatusBadge published={post.status === 'PUBLISHED'} /></div>
         {post.excerpt && <p className="mt-1 line-clamp-1 text-sm text-neutral-500">{post.excerpt}</p>}

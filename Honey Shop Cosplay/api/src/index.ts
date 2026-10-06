@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { drizzle } from 'drizzle-orm/d1';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, like, sql } from 'drizzle-orm';
 import sanitizeHtml from 'sanitize-html';
 import { products, productImages, productVariants, posts, rentals, rentalItems, postCategories } from './db/schema';
 import { AppEnv, AppVariables, hashPassword, randomToken, requireAdmin, requireAuth, SESSION_COOKIE, sha256, supportsPasswordHash, validOrigin, verifyPassword } from './auth';
@@ -127,8 +127,15 @@ app.post('/customers/points/redeem', async c => {
 app.post('/customers/logout', async c => { const token = getCookie(c, CUSTOMER_SESSION_COOKIE); if (token) await c.env.DB.prepare('DELETE FROM customer_sessions WHERE token_hash=?').bind(await sha256(token)).run(); deleteCookie(c, CUSTOMER_SESSION_COOKIE, { path: '/' }); return c.json({ ok: true }); });
 
 app.get('/admin/customers', requireAuth, requireAdmin, async c => {
-  const q = `%${String(c.req.query('q') || '').trim().toLowerCase()}%`;
-  const result = await c.env.DB.prepare("SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.phone,a.active,a.created_at createdAt,coalesce((SELECT sum(points_delta) FROM loyalty_transactions l WHERE l.customer_id=a.id),0) points, (SELECT count(*) FROM rentals r WHERE lower(r.customer_email)=lower(a.email)) rentalCount FROM customer_accounts a WHERE lower(a.email) LIKE ? OR lower(a.name) LIKE ? ORDER BY a.created_at DESC LIMIT 300").bind(q, q).all<any>();
+  const { limit, offset } = parsePage(c);
+  const name = `%${String(c.req.query('name') || '').trim().toLowerCase()}%`;
+  const email = `%${String(c.req.query('email') || '').trim().toLowerCase()}%`;
+  const phone = `%${String(c.req.query('phone') || '').trim().toLowerCase()}%`;
+  const searchText = String(c.req.query('search') || c.req.query('q') || '').trim().toLowerCase();
+  const search = `%${searchText}%`;
+  const active = String(c.req.query('active') || '');
+  const date = String(c.req.query('date') || '').trim();
+  const result = await c.env.DB.prepare("SELECT a.id,a.email,a.name,a.facebook_url facebookUrl,a.phone,a.active,a.created_at createdAt,coalesce((SELECT sum(points_delta) FROM loyalty_transactions l WHERE l.customer_id=a.id),0) points, (SELECT count(*) FROM rentals r WHERE lower(r.customer_email)=lower(a.email)) rentalCount FROM customer_accounts a WHERE (?='' OR lower(a.name) LIKE ? OR lower(a.email) LIKE ? OR lower(coalesce(a.phone,'')) LIKE ?) AND lower(a.name) LIKE ? AND lower(a.email) LIKE ? AND lower(coalesce(a.phone,'')) LIKE ? AND (?='' OR a.active=?) AND (?='' OR substr(a.created_at,1,10)=?) ORDER BY a.created_at DESC LIMIT ? OFFSET ?").bind(searchText, search, search, search, name, email, phone, active, active === '' ? 0 : Number(active), date, date, limit, offset).all<any>();
   return c.json(result.results.map(row => ({ ...row, active: !!row.active, points: Number(row.points) })));
 });
 app.patch('/admin/customers/:id', requireAuth, requireAdmin, async c => {
@@ -152,9 +159,16 @@ app.post('/admin/customers/:id/points', requireAuth, requireAdmin, async c => {
   return c.json({ ok: true });
 });
 app.get('/admin/feedback', requireAuth, requireAdmin, async c => {
-  const status = c.req.query('status');
+  const { limit, offset } = parsePage(c);
+  const status = String(c.req.query('status') || '');
+  const product = `%${String(c.req.query('product') || '').trim().toLowerCase()}%`;
+  const customer = `%${String(c.req.query('customer') || '').trim().toLowerCase()}%`;
+  const content = `%${String(c.req.query('content') || '').trim().toLowerCase()}%`;
+  const searchText = String(c.req.query('search') || '').trim().toLowerCase();
+  const search = `%${searchText}%`;
+  const date = String(c.req.query('date') || '').trim();
   const sqlText = "SELECT f.id,f.product_id productId,p.title productTitle,p.slug productSlug,f.customer_id customerId,f.rental_id rentalId,coalesce(a.name,f.customer_name) customerName,f.customer_email customerEmail,f.content,f.image_url imageUrl,f.hide_identity hideIdentity,f.status,f.created_at createdAt FROM product_feedback f JOIN products p ON p.id=f.product_id LEFT JOIN customer_accounts a ON a.id=f.customer_id";
-  const result = status ? await c.env.DB.prepare(`${sqlText} WHERE f.status=? ORDER BY f.created_at DESC LIMIT 500`).bind(status).all<any>() : await c.env.DB.prepare(`${sqlText} ORDER BY f.created_at DESC LIMIT 500`).all<any>();
+  const result = await c.env.DB.prepare(`${sqlText} WHERE (?='' OR f.status=?) AND (?='' OR lower(p.title) LIKE ? OR lower(coalesce(a.name,f.customer_name)) LIKE ? OR lower(coalesce(f.customer_email,'')) LIKE ? OR lower(f.content) LIKE ?) AND lower(p.title) LIKE ? AND lower(coalesce(a.name,f.customer_name)) LIKE ? AND lower(f.content) LIKE ? AND (?='' OR substr(f.created_at,1,10)=?) ORDER BY f.created_at DESC LIMIT ? OFFSET ?`).bind(status, status, searchText, search, search, search, search, product, customer, content, date, date, limit, offset).all<any>();
   return c.json(result.results.map(row => ({ ...row, hideIdentity: !!row.hideIdentity })));
 });
 app.patch('/admin/feedback/:id', requireAuth, requireAdmin, async c => {
@@ -241,6 +255,44 @@ app.get('/products', async c => {
   ]);
   return c.json(items.map(p => ({ ...p, categories: cats.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest), tags: tags.results.filter(x => x.productId === p.id).map(({ productId, ...rest }) => rest) })));
 });
+app.get('/admin/products', requireAuth, async c => {
+  const { limit, offset } = parsePage(c);
+  const title = `%${String(c.req.query('title') || '').trim().toLowerCase()}%`;
+  const slug = `%${String(c.req.query('slug') || '').trim().toLowerCase()}%`;
+  const searchText = String(c.req.query('search') || '').trim().toLowerCase();
+  const search = `%${searchText}%`;
+  const status = String(c.req.query('status') || '');
+  const price = String(c.req.query('price') || '');
+  const quantity = String(c.req.query('quantity') || '');
+  const conditions = [sql`${products.status} != 'ARCHIVED'`, sql`(${searchText} = '' OR lower(${products.title}) LIKE ${search} OR lower(${products.slug}) LIKE ${search})`, sql`lower(${products.title}) LIKE ${title}`, sql`lower(${products.slug}) LIKE ${slug}`, sql`(${status} = '' OR ${products.status} = ${status})`, sql`(${price} = '' OR ${products.testPrice} = ${Number(price) || 0})`, sql`(${quantity} = '' OR ${products.totalQuantity} = ${Number(quantity) || 0})`];
+  const items = await drizzle(c.env.DB).select().from(products).where(and(...conditions)).orderBy(desc(products.createdAt)).limit(limit).offset(offset);
+  if (!items.length) return c.json([]);
+  const ids = items.map(item => item.id);
+  const marks = ids.map(() => '?').join(',');
+  const [cats, tags] = await Promise.all([
+    c.env.DB.prepare(`SELECT pc.product_id productId,c.id,c.name,c.slug,c.parent_id parentId FROM product_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.product_id IN (${marks})`).bind(...ids).all<any>(),
+    c.env.DB.prepare(`SELECT pt.product_id productId,t.id,t.name,t.slug FROM product_tags pt JOIN tags t ON t.id=pt.tag_id WHERE pt.product_id IN (${marks})`).bind(...ids).all<any>(),
+  ]);
+  return c.json(items.map(item => ({ ...item, categories: cats.results.filter(row => row.productId === item.id).map(({ productId, ...row }) => row), tags: tags.results.filter(row => row.productId === item.id).map(({ productId, ...row }) => row) })));
+});
+app.get('/admin/tags', requireAuth, async c => {
+  const { limit, offset } = parsePage(c);
+  const name = `%${String(c.req.query('name') || '').trim().toLowerCase()}%`;
+  const slug = `%${String(c.req.query('slug') || '').trim().toLowerCase()}%`;
+  const searchText = String(c.req.query('search') || '').trim().toLowerCase();
+  const search = `%${searchText}%`;
+  const result = await c.env.DB.prepare('SELECT id,name,slug FROM tags WHERE (?=\'\' OR lower(name) LIKE ? OR lower(slug) LIKE ?) AND lower(name) LIKE ? AND lower(slug) LIKE ? ORDER BY name LIMIT ? OFFSET ?').bind(searchText, search, search, name, slug, limit, offset).all();
+  return c.json(result.results);
+});
+app.get('/admin/post-categories', requireAuth, async c => {
+  const { limit, offset } = parsePage(c);
+  const name = `%${String(c.req.query('name') || '').trim().toLowerCase()}%`;
+  const slug = `%${String(c.req.query('slug') || '').trim().toLowerCase()}%`;
+  const searchText = String(c.req.query('search') || '').trim().toLowerCase();
+  const search = `%${searchText}%`;
+  const result = await c.env.DB.prepare('SELECT id,name,slug FROM post_categories WHERE (?=\'\' OR lower(name) LIKE ? OR lower(slug) LIKE ?) AND lower(name) LIKE ? AND lower(slug) LIKE ? ORDER BY name LIMIT ? OFFSET ?').bind(searchText, search, search, name, slug, limit, offset).all();
+  return c.json(result.results);
+});
 app.get('/products/id/:id', requireAuth, async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(eq(products.id, c.req.param('id')!)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
 app.get('/products/:slug', async c => { const db = drizzle(c.env.DB); const product = await db.select().from(products).where(and(eq(products.slug, c.req.param('slug')), sql`${products.status} != 'ARCHIVED'`)).get(); if (!product) return c.json({ message: 'Product not found' }, 404); const [images, variants, taxonomy] = await Promise.all([db.select().from(productImages).where(eq(productImages.productId, product.id)), db.select().from(productVariants).where(eq(productVariants.productId, product.id)), loadTaxonomy(c.env.DB, product.id)]); return c.json({ ...product, images, variants, ...taxonomy }); });
 app.post('/products', requireAuth, async c => { const body = await c.req.json<any>(); const stamp = now(); const id = body.id || crypto.randomUUID(); const db = drizzle(c.env.DB); await db.insert(products).values({ id, slug: body.slug, title: body.title, description: body.description, testPrice: body.testPrice || 0, fesPrice: body.fesPrice || 0, shootPrice: body.shootPrice || 0, thumbnailUrl: body.thumbnailUrl, status: body.status || 'AVAILABLE', totalQuantity: body.totalQuantity || 1, note: body.note, location: body.location, isCombo: !!body.isCombo, rewardPoints: Number(body.rewardPoints) || 0, pointsPrice: Number(body.pointsPrice) || 0, createdAt: stamp, updatedAt: stamp }); await attachTaxonomy(c.env.DB, id, body); const [product, taxonomy] = await Promise.all([db.select().from(products).where(eq(products.id, id)).get(), loadTaxonomy(c.env.DB, id)]); return c.json({ ...product, ...taxonomy }, 201); });
@@ -296,6 +348,12 @@ const postFields = {
   publishedAt: posts.publishedAt, createdAt: posts.createdAt, updatedAt: posts.updatedAt,
   categoryName: postCategories.name, categorySlug: postCategories.slug,
 };
+const postSummaryFields = {
+  id: posts.id, slug: posts.slug, title: posts.title, excerpt: posts.excerpt,
+  coverUrl: posts.coverUrl, type: posts.type, status: posts.status, categoryId: posts.categoryId,
+  sortIndex: posts.sortIndex, publishedAt: posts.publishedAt, createdAt: posts.createdAt,
+  categoryName: postCategories.name, categorySlug: postCategories.slug,
+};
 const cleanPost = <T extends { content: string }>(item: T) => ({ ...item, content: cleanContent(item.content) });
 const postOrder = [sql`CASE WHEN ${posts.type}='GUIDE' THEN ${posts.sortIndex} END ASC`, desc(posts.createdAt)];
 app.get('/posts', async c => {
@@ -313,8 +371,20 @@ app.get('/admin/posts', requireAuth, async c => {
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 200, 1), 5000);
   const type = c.req.query('type');
   if (type && !['ARTICLE', 'GUIDE'].includes(type)) return c.json({ message: 'Loại bài không hợp lệ' }, 400);
-  const rows = await drizzle(c.env.DB).select(postFields).from(posts).leftJoin(postCategories, eq(posts.categoryId, postCategories.id))
-    .where(type ? eq(posts.type, type) : undefined).orderBy(...postOrder).limit(limit).offset(offset);
+  const title = String(c.req.query('title') || '').trim();
+  const slug = String(c.req.query('slug') || '').trim();
+  const category = String(c.req.query('category') || '').trim();
+  const status = String(c.req.query('status') || '').trim();
+  const date = String(c.req.query('date') || '').trim();
+  const searchText = String(c.req.query('search') || '').trim();
+  const searchLike = `%${searchText}%`;
+  const summary = c.req.query('summary') === '1';
+  const conditions = and(type ? eq(posts.type, type) : undefined, searchText ? sql`(lower(${posts.title}) LIKE lower(${searchLike}) OR lower(${posts.slug}) LIKE lower(${searchLike}) OR lower(coalesce(${postCategories.name},'')) LIKE lower(${searchLike}))` : undefined, title ? like(posts.title, `%${title}%`) : undefined, slug ? like(posts.slug, `%${slug}%`) : undefined, category ? like(postCategories.name, `%${category}%`) : undefined, status ? eq(posts.status, status) : undefined, date ? sql`substr(${posts.createdAt},1,10) = ${date}` : undefined);
+  if (summary) {
+    const rows = await drizzle(c.env.DB).select(postSummaryFields).from(posts).leftJoin(postCategories, eq(posts.categoryId, postCategories.id)).where(conditions).orderBy(...postOrder).limit(limit).offset(offset);
+    return c.json(rows);
+  }
+  const rows = await drizzle(c.env.DB).select(postFields).from(posts).leftJoin(postCategories, eq(posts.categoryId, postCategories.id)).where(conditions).orderBy(...postOrder).limit(limit).offset(offset);
   return c.json(rows.map(cleanPost));
 });
 app.get('/posts/:slug', async c => {
@@ -533,7 +603,17 @@ app.get('/media/:key{.*}', async c => {
   return new Response(object.body as any, { headers: { 'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream', 'Cache-Control': 'public, max-age=31536000, immutable' } });
 });
 
-app.get('/admin/users', requireAuth, requireAdmin, async c => { const { limit, offset } = parsePage(c); const result = await c.env.DB.prepare('SELECT id,email,name,role,active,created_at createdAt FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all(); return c.json(result.results); });
+app.get('/admin/users', requireAuth, requireAdmin, async c => {
+  const { limit, offset } = parsePage(c);
+  const name = `%${String(c.req.query('name') || '').trim().toLowerCase()}%`;
+  const email = `%${String(c.req.query('email') || '').trim().toLowerCase()}%`;
+  const role = String(c.req.query('role') || '');
+  const active = String(c.req.query('active') || '');
+  const searchText = String(c.req.query('search') || '').trim().toLowerCase();
+  const search = `%${searchText}%`;
+  const result = await c.env.DB.prepare("SELECT id,email,name,role,active,created_at createdAt FROM users WHERE (?='' OR lower(name) LIKE ? OR lower(email) LIKE ?) AND lower(name) LIKE ? AND lower(email) LIKE ? AND (?='' OR role=?) AND (?='' OR active=?) ORDER BY created_at DESC LIMIT ? OFFSET ?").bind(searchText, search, search, name, email, role, role, active, active === '' ? 0 : Number(active), limit, offset).all();
+  return c.json(result.results);
+});
 app.patch('/admin/users/:id', requireAuth, requireAdmin, async c => { const body = await c.req.json<any>(); await c.env.DB.prepare('UPDATE users SET role=coalesce(?,role),active=coalesce(?,active),updated_at=? WHERE id=?').bind(body.role || null, typeof body.active === 'boolean' ? Number(body.active) : null, now(), c.req.param('id')).run(); if (body.active === false) await c.env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 app.delete('/admin/users/:id/sessions', requireAuth, requireAdmin, async c => { await c.env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(c.req.param('id')).run(); return c.json({ ok: true }); });
 app.get('/admin/invitations', requireAuth, requireAdmin, async c => { const { limit, offset } = parsePage(c); const result = await c.env.DB.prepare('SELECT id,email,role,expires_at expiresAt,accepted_at acceptedAt,created_at createdAt FROM invitations ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all(); return c.json(result.results); });

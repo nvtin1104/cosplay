@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X, BookOpen, Settings, ChevronDown, Layers, MessageCircleHeart } from 'lucide-react';
+import { Box, CalendarDays, FileText, FolderTree, LayoutDashboard, LogOut, Menu, Tags, Users, X, BookOpen, Settings, ChevronDown, Layers, MessageCircleHeart, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import type { AuthUser } from '../../lib/types';
 
@@ -26,11 +26,26 @@ const contentLinks = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const denseListRoutes = ['/admin/products', '/admin/tags', '/admin/customers', '/admin/feedback', '/admin/users', '/admin/posts', '/admin/post-categories'];
+  const isDenseListPage = denseListRoutes.includes(path);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [open, setOpen] = useState(false);
   const [contentOpen, setContentOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const sidebarWidth = collapsed ? 'md:ml-[72px]' : 'md:ml-64';
+
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('honey_admin_sidebar_collapsed') === 'true');
+  }, []);
+
+  function toggleSidebar() {
+    setCollapsed(value => {
+      localStorage.setItem('honey_admin_sidebar_collapsed', String(!value));
+      return !value;
+    });
+  }
 
   useEffect(() => {
     try {
@@ -76,12 +91,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-neutral-200 bg-white p-5 transition-transform md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-neutral-200 bg-white transition-[width,transform] duration-200 md:translate-x-0 ${collapsed ? 'w-[72px] p-3' : 'w-64 p-5'} ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex items-center justify-between">
-          <Link href="/admin" prefetch={true} className="text-lg font-extrabold tracking-tight">
+          <Link href="/admin" prefetch={true} title="HONEY / ADMIN" className={`overflow-hidden whitespace-nowrap text-lg font-extrabold tracking-tight ${collapsed ? 'sr-only' : ''}`}>
             HONEY / ADMIN
           </Link>
           <button className="md:hidden" onClick={() => setOpen(false)}>
@@ -102,23 +117,24 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   });
                 }
               }}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-150 ${
+              title={collapsed ? label : undefined}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-150 ${collapsed ? 'justify-center px-0' : ''} ${
                 path === href || (href !== '/admin' && path.startsWith(href))
                   ? 'bg-black text-white shadow-sm'
                   : 'text-neutral-600 hover:bg-neutral-100 hover:text-black active:scale-[0.98]'
               }`}
             >
               <Icon size={18} />
-              {label}
+              {!collapsed && label}
             </Link>
           ))}
           <div className="pt-4">
-            <button type="button" aria-expanded={contentOpen} aria-controls="admin-content-submenu" onClick={() => setContentOpen(value => !value)}
+            <button type="button" title={collapsed ? 'Nội dung' : undefined} aria-expanded={contentOpen} aria-controls="admin-content-submenu" onClick={() => collapsed ? setCollapsed(false) : setContentOpen(value => !value)}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ${contentOpen ? 'text-neutral-900' : 'text-neutral-600 hover:bg-neutral-100 hover:text-black'}`}>
-              <span className="flex items-center gap-3"><Layers size={17} /><span className="text-[10px] uppercase tracking-[.2em]">Nội dung</span></span>
-              <ChevronDown size={16} className={`transition-transform duration-200 ${contentOpen ? 'rotate-180' : ''}`} />
+              <span className={`flex items-center gap-3 ${collapsed ? 'mx-auto' : ''}`}><Layers size={17} />{!collapsed && <span className="text-[10px] uppercase tracking-[.2em]">Nội dung</span>}</span>
+              {!collapsed && <ChevronDown size={16} className={`transition-transform duration-200 ${contentOpen ? 'rotate-180' : ''}`} />}
             </button>
-            <div id="admin-content-submenu" aria-hidden={!contentOpen} className={`ml-3 grid overflow-hidden border-l border-neutral-200 pl-3 transition-[grid-template-rows,opacity,margin] duration-200 ${contentOpen ? 'mt-1 grid-rows-[1fr] opacity-100' : 'mt-0 grid-rows-[0fr] opacity-0'}`}>
+            <div id="admin-content-submenu" aria-hidden={!contentOpen || collapsed} className={`ml-3 grid overflow-hidden border-l border-neutral-200 pl-3 transition-[grid-template-rows,opacity,margin] duration-200 ${contentOpen && !collapsed ? 'mt-1 grid-rows-[1fr] opacity-100' : 'mt-0 grid-rows-[0fr] opacity-0'}`}>
               <div className="min-h-0 overflow-hidden">
                 <div className="space-y-1 py-0.5">
               {contentLinks.map(([href, label, Icon]) => (
@@ -134,27 +150,33 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
         <div className="mt-auto shrink-0 border-t border-neutral-200 pt-4">
-          <p suppressHydrationWarning className="truncate text-sm font-semibold">{user?.name || 'Đang tải…'}</p>
-          <p suppressHydrationWarning className="truncate text-xs text-neutral-500">{user?.email || 'admin@honeyshop.local'}</p>
+          {!collapsed && <><p suppressHydrationWarning className="truncate text-sm font-semibold">{user?.name || 'Đang tải…'}</p>
+          <p suppressHydrationWarning className="truncate text-xs text-neutral-500">{user?.email || 'admin@honeyshop.local'}</p></>}
           <button
             onClick={logout}
-            className="mt-3 flex items-center gap-2 text-sm font-semibold text-neutral-500 hover:text-black transition-colors"
+            title="Đăng xuất"
+            className={`mt-3 flex items-center gap-2 text-sm font-semibold text-neutral-500 hover:text-black transition-colors ${collapsed ? 'justify-center' : ''}`}
           >
-            <LogOut size={16} /> Đăng xuất
+            <LogOut size={16} /> {!collapsed && 'Đăng xuất'}
           </button>
         </div>
       </aside>
-      <div className="md:pl-64">
-        <header className="flex h-16 items-center justify-between border-b border-neutral-200 bg-white px-5 md:px-8">
+      <div className={`min-w-0 transition-[margin] duration-200 ${sidebarWidth}`}>
+        <header className={`flex items-center justify-between border-b border-neutral-200 bg-white ${isDenseListPage ? 'h-11 px-3' : 'h-16 px-5 md:px-8'}`}>
           <button className="md:hidden" onClick={() => setOpen(true)}>
             <Menu />
           </button>
-          <p className="hidden text-sm text-neutral-500 md:block">Hệ thống vận hành Honey Shop</p>
+          <div className="hidden items-center gap-3 md:flex">
+            <button onClick={toggleSidebar} aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} title={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
+              {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+            {!isDenseListPage && <p className="text-sm text-neutral-500">Hệ thống vận hành Honey Shop</p>}
+          </div>
           <span suppressHydrationWarning className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold">
             {user?.role || 'ADMIN'}
           </span>
         </header>
-        <main>{children}</main>
+        <main className="min-w-0">{children}</main>
       </div>
     </div>
   );

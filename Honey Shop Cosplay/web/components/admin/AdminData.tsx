@@ -2,9 +2,11 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, ExternalLink } from 'lucide-react';
+import { Plus, ExternalLink, UserPlus, X } from 'lucide-react';
 import type { AuthUser, Post, Product } from '../../lib/types';
-import { AdminButton, AdminInput, AdminSelect, AdminTextarea } from './AdminUI';
+import { AdminButton, AdminInput, AdminSelect, AdminSheetSelect, AdminTextarea } from './AdminUI';
+import { AdminDataTable, useAdminPagedList, updateAdminTableFilter, type AdminDataTableColumn } from './AdminDataTable';
+import { createPortal } from 'react-dom';
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -116,49 +118,16 @@ export function DashboardData({ initialData }: { initialData?: { products: Produ
 
 const PAGE_SIZE = 30;
 
-export function ProductManager({ initialProducts = [] }: { initialProducts?: Product[] }) {
+export function ProductManager() {
   const user = useCurrentUser();
-  const [items, setItems] = useState<Product[]>(initialProducts);
-  const [loading, setLoading] = useState(initialProducts.length === 0);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(initialProducts.length >= PAGE_SIZE);
-  const [error, setError] = useState('');
-
-  const load = () => {
-    return api<Product[]>(`/products?limit=${PAGE_SIZE}`)
-      .then((data) => {
-        setItems(data);
-        setHasMore(data.length >= PAGE_SIZE);
-        setError('');
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
-
-  async function loadMore() {
-    setLoadingMore(true);
-    try {
-      const data = await api<Product[]>(`/products?limit=${PAGE_SIZE}&offset=${items.length}`);
-      setItems((prev) => [...prev, ...data]);
-      setHasMore(data.length >= PAGE_SIZE);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-
-  useEffect(() => {
-    if (initialProducts.length === 0) {
-      void load();
-    }
-  }, []);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const { rows: items, loading, loadingMore, hasMore, error, setError, loadMore, reload } = useAdminPagedList<Product>('/admin/products', filters, PAGE_SIZE);
 
   async function archive(id: string) {
     if (!confirm('Ẩn sản phẩm này khỏi storefront?')) return;
     try {
       await api(`/products/${id}`, { method: 'DELETE' });
-      void load();
+      reload();
     } catch (e: any) {
       setError(e.message);
     }
@@ -166,140 +135,55 @@ export function ProductManager({ initialProducts = [] }: { initialProducts?: Pro
 
   return (
     <>
-      {error && <State loading={false} error={error} />}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-white px-3 py-1.5">
         <p className="text-sm font-medium text-neutral-500">
-          Hiện có <b>{items.length}</b> sản phẩm trong catalog
+          Hiện có <b>{items.length}</b> sản phẩm đã tải
         </p>
         <Link
           href="/admin/products/new"
           prefetch={true}
-          className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-neutral-800 transition-colors"
+          className="inline-flex items-center gap-2 rounded-md bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-neutral-800 transition-colors"
         >
           <Plus size={16} />
           <span>Thêm sản phẩm mới</span>
         </Link>
       </div>
 
-      {loading && items.length === 0 ? (
-        <State loading={true} error="" />
-      ) : (
-        <div className="admin-card overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase text-neutral-500">
-              <tr>
-                <th className="p-4">Sản phẩm</th>
-                <th>Giá test</th>
-                <th>Số lượng</th>
-                <th>Trạng thái</th>
-                <th className="text-right p-4">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr className="border-b border-neutral-100 hover:bg-neutral-50/50 transition-colors" key={p.id}>
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      {p.thumbnailUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.thumbnailUrl}
-                          alt={p.title}
-                          className="h-11 w-11 shrink-0 rounded-lg object-cover border border-neutral-200"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-100 text-xs text-neutral-400">
-                          No img
-                        </div>
-                      )}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <b className="text-neutral-900">{p.title}</b>
-                          {p.isCombo && (
-                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                              Combo
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-neutral-400">
-                          <span>{p.slug}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="font-semibold text-neutral-800">
-                    {(p.testPrice || 0).toLocaleString('vi-VN')} đ
-                  </td>
-                  <td>
-                    <span className="font-medium text-neutral-700">{p.totalQuantity}</span>
-                  </td>
-                  <td>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        p.status === 'AVAILABLE'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : p.status === 'RENTED'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                      }`}
-                    >
-                      {p.status === 'AVAILABLE'
-                        ? 'Sẵn sàng'
-                        : p.status === 'RENTED'
-                        ? 'Đang thuê'
-                        : p.status === 'MAINTENANCE'
-                        ? 'Bảo trì'
-                        : p.status}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="inline-flex items-center gap-3">
-                      <Link
-                        href={`/cosplay/${p.slug}`}
-                        target="_blank"
-                        className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-black transition-colors"
-                        title="Xem trên storefront"
-                      >
-                        <ExternalLink size={14} />
-                        <span>Xem</span>
-                      </Link>
-                      <Link
-                        href={{ pathname: '/admin/products/edit', query: { id: p.id } }}
-                        prefetch={true}
-                        className="text-xs font-semibold text-neutral-600 hover:text-black transition-colors"
-                      >
-                        Sửa
-                      </Link>
-                      {user?.role === 'ADMIN' && (
-                        <button
-                          onClick={() => archive(p.id)}
-                          className="text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
-                        >
-                          Ẩn
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} />
+      <AdminDataTable
+        columns={[
+          { key: 'product', header: 'Sản phẩm', className: 'min-w-[230px]', render: p => <div className="flex items-center gap-2.5">{p.thumbnailUrl ? <img loading="lazy" src={p.thumbnailUrl} alt="" className="h-9 w-9 shrink-0 rounded border border-neutral-200 object-cover" /> : <div className="h-9 w-9 shrink-0 rounded border border-neutral-200 bg-neutral-100" />}<div className="min-w-0"><div className="flex items-center gap-1.5"><b className="truncate text-neutral-900">{p.title}</b>{p.isCombo && <span className="rounded bg-amber-100 px-1 text-[9px] font-bold text-amber-800">Combo</span>}</div><span className="block truncate text-[11px] text-neutral-400">{p.slug}</span></div></div> },
+          { key: 'slug', header: 'Slug', className: 'min-w-[150px] max-w-[230px]', render: p => <span className="block truncate text-xs" title={p.slug}>{p.slug}</span> },
+          { key: 'price', header: 'Giá test', filter: { key: 'price', label: 'giá', type: 'number', placeholder: '=' }, className: 'min-w-[105px] whitespace-nowrap text-right tabular-nums', headerClassName: 'text-right', render: p => `${(p.testPrice || 0).toLocaleString('vi-VN')}đ` },
+          { key: 'quantity', header: 'Số lượng', filter: { key: 'quantity', label: 'số lượng', type: 'number', placeholder: '=' }, className: 'min-w-[85px] text-center tabular-nums', headerClassName: 'text-center', render: p => p.totalQuantity },
+          { key: 'status', header: 'Trạng thái', filter: { key: 'status', label: 'trạng thái', type: 'select', options: [{ value: 'AVAILABLE', label: 'Sẵn sàng' }, { value: 'RENTED', label: 'Đang thuê' }, { value: 'MAINTENANCE', label: 'Bảo trì' }] }, className: 'min-w-[120px]', render: p => <span className={`rounded px-2 py-1 text-[10px] font-bold ${p.status === 'AVAILABLE' ? 'bg-emerald-50 text-emerald-700' : p.status === 'RENTED' ? 'bg-amber-50 text-amber-700' : 'bg-neutral-100 text-neutral-700'}`}>{p.status === 'AVAILABLE' ? 'Sẵn sàng' : p.status === 'RENTED' ? 'Đang thuê' : p.status === 'MAINTENANCE' ? 'Bảo trì' : p.status}</span> },
+          { key: 'actions', header: 'Thao tác', className: 'min-w-[130px] text-right', headerClassName: 'text-right', render: p => <div className="inline-flex items-center gap-2"><Link href={`/cosplay/${p.slug}`} target="_blank" className="text-xs text-neutral-500 hover:text-black" title="Xem storefront"><ExternalLink size={14} /></Link><Link href={{ pathname: '/admin/products/edit', query: { id: p.id } }} className="text-xs font-semibold text-neutral-600 hover:text-black">Sửa</Link>{user?.role === 'ADMIN' && <button onClick={() => void archive(p.id)} className="text-xs font-semibold text-red-500 hover:text-red-700">Ẩn</button>}</div> },
+        ] as AdminDataTableColumn<Product>[]}
+        rows={items} loading={loading} loadingMore={loadingMore} hasMore={hasMore} onLoadMore={loadMore} error={error} filters={filters} onFilterChange={(key, value) => setFilters(current => updateAdminTableFilter(current, key, value))} searchPlaceholder="Tìm sản phẩm theo tên hoặc slug…" minWidth="900px" emptyMessage="Chưa có sản phẩm phù hợp."
+      />
     </>
   );
 }
 
 const RENTAL_STATUSES = ['HOLD', 'CONFIRMED', 'CANCELLED', 'RETURNED'] as const;
 
+type Rental = {
+  id: string;
+  customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  facebookUrl?: string;
+  startDate: string;
+  endDate: string;
+  deposit?: number;
+  totalAmount?: number;
+  note?: string;
+  status: string;
+};
+
 export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] }) {
   const user = useCurrentUser();
   const isAdmin = user?.role === 'ADMIN';
-  const [items, setItems] = useState<any[]>(initialRentals);
+  const [items, setItems] = useState<Rental[]>(initialRentals);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(initialRentals.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -310,7 +194,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
   const [savingId, setSavingId] = useState('');
 
   const load = () => {
-    return api<any[]>(`/rentals?limit=${PAGE_SIZE}`)
+    return api<Rental[]>(`/rentals?limit=${PAGE_SIZE}`)
       .then((data) => {
         setItems(data);
         setHasMore(data.length >= PAGE_SIZE);
@@ -323,7 +207,7 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
   async function loadMore() {
     setLoadingMore(true);
     try {
-      const data = await api<any[]>(`/rentals?limit=${PAGE_SIZE}&offset=${items.length}`);
+      const data = await api<Rental[]>(`/rentals?limit=${PAGE_SIZE}&offset=${items.length}`);
       setItems((prev) => [...prev, ...data]);
       setHasMore(data.length >= PAGE_SIZE);
     } catch (e: any) {
@@ -390,13 +274,19 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
   return (
     <>
       {error && <State loading={false} error={error} />}
-      <div className="mb-5 flex justify-end">
-        <button onClick={() => setOpen(!open)} className="rounded-lg bg-black px-4 py-2.5 text-sm font-semibold text-white">
+      <div className="sticky top-0 z-20 flex min-h-14 items-center justify-between border-b border-neutral-200 bg-white/95 px-3 backdrop-blur md:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <h1 className="shrink-0 text-base font-bold tracking-tight text-neutral-900">Lịch thuê</h1>
+          <span className="hidden text-xs text-neutral-400 sm:inline">{items.length} đơn hàng</span>
+          <span className="h-5 border-l border-neutral-200" />
+          <span className="truncate text-xs text-neutral-500">Theo dõi khách, thời gian, tiền cọc và trạng thái trả đồ</span>
+        </div>
+        <button onClick={() => setOpen(!open)} className="ml-3 shrink-0 rounded-md bg-amber-500 px-3 py-2 text-xs font-bold text-neutral-950 transition hover:bg-amber-400">
           {open ? 'Đóng form' : '+ Tạo lịch thuê'}
         </button>
       </div>
       {open && (
-        <form onSubmit={create} className="admin-card mb-6 grid gap-4 p-6">
+        <form onSubmit={create} className="grid gap-4 border-b border-neutral-200 bg-neutral-50 p-3 md:grid-cols-2 md:p-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <AdminInput name="customerName" placeholder="Tên khách hàng" required />
             <AdminInput name="customerEmail" type="email" placeholder="Email khách (để liên kết tài khoản & tích điểm)" required />
@@ -448,65 +338,31 @@ export function RentalManager({ initialRentals = [] }: { initialRentals?: any[] 
           <AdminButton className="px-4 py-3">Lưu lịch thuê</AdminButton>
         </form>
       )}
-      {loading && items.length === 0 ? (
-        <State loading={true} error="" />
-      ) : (
-        <div className="admin-card overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left text-sm">
-            <thead className="border-b bg-neutral-50 text-xs uppercase text-neutral-500">
-              <tr>
-                <th className="p-4">Khách hàng</th>
-                <th>Thời gian</th>
-                <th>Cọc</th>
-                <th>Tổng</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length ? (
-                items.map((r) => {
-                  const locked = r.status === 'CONFIRMED' && !isAdmin;
-                  return (
-                    <tr className="border-b border-neutral-100" key={r.id}>
-                      <td className="p-4">
-                        <b>{r.customerName}</b>
-                        <p className="text-xs text-neutral-400">{[r.customerPhone, r.customerEmail].filter(Boolean).join(' · ')}{r.facebookUrl && <> · <a href={r.facebookUrl} target="_blank" rel="noreferrer" className="text-blue-700 underline">Facebook</a></>}</p>
-                      </td>
-                      <td>
-                        {new Date(r.startDate).toLocaleDateString('vi-VN')} — {new Date(r.endDate).toLocaleDateString('vi-VN')}
-                      </td>
-                      <td>{Number(r.deposit || 0).toLocaleString('vi-VN')}đ</td>
-                      <td>{Number(r.totalAmount || 0).toLocaleString('vi-VN')}đ</td>
-                      <td>
-                        <AdminSelect
-                          className="!mt-0 min-w-36"
-                          size="compact"
-                          ariaLabel={`Trạng thái lịch thuê ${r.id}`}
-                          value={r.status}
-                          searchable={false}
-                          allowEmpty={false}
-                          disabled={locked || savingId === r.id}
-                          onChange={(status) => changeStatus(r.id, status)}
-                          options={RENTAL_STATUSES.map(status => ({ value: status, label: status }))}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={5} className="p-10 text-center text-neutral-400">
-                    Chưa có lịch thuê.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} />
+      {loading && items.length === 0 ? <State loading={true} error="" /> : <RentalTable items={items} isAdmin={isAdmin} savingId={savingId} onStatusChange={changeStatus} />}
+      {error && <div className="px-3 pt-3 text-sm text-red-700">{error}</div>}
+      <div className="px-3"><LoadMore onClick={loadMore} loading={loadingMore} hasMore={hasMore} /></div>
     </>
   );
+}
+
+function RentalTable({ items, isAdmin, savingId, onStatusChange }: {
+  items: Rental[];
+  isAdmin: boolean;
+  savingId: string;
+  onStatusChange: (id: string, status: string) => void;
+}) {
+  const columns: AdminDataTableColumn<Rental>[] = [
+    { key: 'customer', header: 'Khách hàng', className: 'min-w-[190px]', render: row => <span className="font-semibold text-neutral-900">{row.customerName}</span> },
+    { key: 'contact', header: 'Liên hệ', className: 'min-w-[230px]', render: row => <span className="block truncate text-xs" title={[row.customerPhone, row.customerEmail].filter(Boolean).join(' · ')}>{[row.customerPhone, row.customerEmail].filter(Boolean).join(' · ') || '—'}</span> },
+    { key: 'facebook', header: 'Facebook', className: 'min-w-[105px]', render: row => row.facebookUrl ? <a href={row.facebookUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-700 hover:underline">Mở hồ sơ ↗</a> : <span className="text-neutral-300">—</span> },
+    { key: 'dates', header: 'Thời gian thuê', className: 'min-w-[190px] whitespace-nowrap tabular-nums', render: row => <>{new Date(row.startDate).toLocaleDateString('vi-VN')} <span className="text-neutral-300">→</span> {new Date(row.endDate).toLocaleDateString('vi-VN')}</> },
+    { key: 'deposit', header: 'Tiền cọc', className: 'min-w-[100px] whitespace-nowrap text-right tabular-nums', headerClassName: 'text-right', render: row => `${Number(row.deposit || 0).toLocaleString('vi-VN')}đ` },
+    { key: 'total', header: 'Tổng tiền', className: 'min-w-[110px] whitespace-nowrap text-right font-semibold tabular-nums', headerClassName: 'text-right', render: row => `${Number(row.totalAmount || 0).toLocaleString('vi-VN')}đ` },
+    { key: 'note', header: 'Ghi chú', className: 'min-w-[170px] max-w-[260px]', render: row => <span className="block truncate text-xs text-neutral-500" title={row.note || ''}>{row.note || '—'}</span> },
+    { key: 'status', header: 'Trạng thái', className: 'relative min-w-[145px] !p-0', render: row => <AdminSheetSelect ariaLabel={`Trạng thái lịch thuê ${row.id}`} value={row.status} disabled={(row.status === 'CONFIRMED' && !isAdmin) || savingId === row.id} onChange={status => onStatusChange(row.id, status)} options={RENTAL_STATUSES.map(status => ({ value: status, label: status }))} /> },
+  ];
+
+  return <AdminDataTable columns={columns} rows={items} emptyMessage="Chưa có lịch thuê." minWidth="1160px" />;
 }
 
 export function PostManager({ initialPosts = [] }: { initialPosts?: Post[] }) {
@@ -675,26 +531,28 @@ function inviteStatus(invite: any): { label: string; className: string } {
 
 export function UserManager() {
   const me = useCurrentUser();
-  const [users, setUsers] = useState<any[]>([]);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const { rows: users, loading, loadingMore, hasMore, error, loadMore, reload } = useAdminPagedList<any>('/admin/users', filters);
   const [invites, setInvites] = useState<any[]>([]);
   const [message, setMessage] = useState('');
   const [savingId, setSavingId] = useState('');
-
-  const load = () => {
-    return Promise.all([api<any[]>('/admin/users?limit=200'), api<any[]>('/admin/invitations?limit=200')])
-      .then(([u, i]) => {
-        setUsers(u);
-        setInvites(i);
-      })
-      .catch((e) => setMessage(e.message));
-  };
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteSaving, setInviteSaving] = useState(false);
 
   useEffect(() => {
-    void load();
+    api<any[]>('/admin/invitations?limit=30').then(setInvites).catch((e) => setMessage(e.message));
   }, []);
+
+  useEffect(() => {
+    if (!inviteOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setInviteOpen(false); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [inviteOpen]);
 
   async function invite(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setInviteSaving(true);
     const f = new FormData(e.currentTarget);
     try {
       const result = await api<any>('/admin/invitations', {
@@ -702,9 +560,13 @@ export function UserManager() {
         body: JSON.stringify({ email: f.get('email'), role: f.get('role') }),
       });
       setMessage(result.inviteUrl ? `Link demo: ${result.inviteUrl}` : 'Đã gửi lời mời qua email.');
-      void load();
+      setInviteOpen(false);
+      reload();
+      void api<any[]>('/admin/invitations?limit=30').then(setInvites).catch((error) => setMessage(error.message));
     } catch (e: any) {
       setMessage(e.message);
+    } finally {
+      setInviteSaving(false);
     }
   }
 
@@ -712,7 +574,7 @@ export function UserManager() {
     setSavingId(id);
     try {
       await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-      void load();
+      reload();
     } catch (e: any) {
       setMessage(e.message);
     } finally {
@@ -721,56 +583,26 @@ export function UserManager() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_.7fr]">
-      <div className="admin-card overflow-hidden">
-        <div className="border-b p-5">
-          <h2 className="font-bold">Tài khoản</h2>
-        </div>
-        {users.map((u) => {
-          const isSelf = u.id === me?.id;
-          return (
-            <div className="flex items-center justify-between gap-3 border-b p-5" key={u.id}>
-              <div>
-                <b>{u.name}</b>
-                <p className="text-sm text-neutral-500">{u.email}</p>
-                {!u.active && <span className="text-xs font-semibold text-red-500">Đã khóa</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <AdminSelect
-                  className="w-36"
-                  size="compact"
-                  ariaLabel={`Vai trò của ${u.name}`}
-                  value={u.role}
-                  disabled={isSelf || savingId === u.id}
-                  searchable={false}
-                  options={[{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }]}
-                  onChange={(role) => updateUser(u.id, { role })}
-                />
-                <button
-                  disabled={isSelf || savingId === u.id}
-                  onClick={() => updateUser(u.id, { active: !u.active })}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-60 ${
-                    u.active ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  }`}
-                >
-                  {u.active ? 'Khóa' : 'Mở khóa'}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+    <>
+    <div className="min-w-0">
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-neutral-200 bg-white px-2">
+        <span className="text-xs text-neutral-500">{users.length} tài khoản đã tải</span>
+        <button type="button" onClick={() => { setMessage(''); setInviteOpen(true); }} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-black px-3 text-xs font-semibold text-white hover:bg-neutral-800"><UserPlus size={14} />Mời thành viên</button>
       </div>
-      <div>
-        <form onSubmit={invite} className="admin-card p-5">
-          <h2 className="font-bold">Mời thành viên</h2>
-          <AdminInput className="mt-4" name="email" type="email" placeholder="staff@example.com" required />
-          <AdminSelect name="role" ariaLabel="Vai trò thành viên" defaultValue="STAFF" searchable={false} options={[{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }]} />
-          <AdminButton className="mt-3 w-full py-3">Gửi lời mời</AdminButton>
-          {message && <p className="mt-3 break-all text-xs leading-5 text-neutral-500">{message}</p>}
-        </form>
-        <div className="admin-card mt-5 overflow-hidden p-5">
+      {message && <p role="status" className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{message}</p>}
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0">
+        <AdminDataTable columns={[
+          { key: 'name', header: 'Nhân sự', className: 'min-w-[165px]', render: row => <span className="font-semibold text-neutral-900">{row.name}</span> },
+          { key: 'email', header: 'Email', className: 'min-w-[210px] text-xs', render: row => row.email },
+          { key: 'role', header: 'Vai trò', filter: { key: 'role', label: 'vai trò', type: 'select', options: [{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }] }, className: 'min-w-[120px]', render: row => <AdminSelect className="!mt-0 w-full" size="compact" ariaLabel={`Vai trò của ${row.name}`} value={row.role} disabled={row.id === me?.id || savingId === row.id} searchable={false} allowEmpty={false} options={[{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }]} onChange={role => void updateUser(row.id, { role })} /> },
+          { key: 'active', header: 'Trạng thái', filter: { key: 'active', label: 'trạng thái', type: 'select', options: [{ value: '1', label: 'Hoạt động' }, { value: '0', label: 'Đã khóa' }] }, className: 'min-w-[120px]', render: row => <button type="button" disabled={row.id === me?.id || savingId === row.id} onClick={() => void updateUser(row.id, { active: !row.active })} className={`rounded px-2 py-1 text-[10px] font-bold disabled:opacity-50 ${row.active ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>{row.active ? 'Hoạt động' : 'Đã khóa'}</button> },
+        ] as AdminDataTableColumn<any>[]} rows={users} loading={loading} loadingMore={loadingMore} hasMore={hasMore} onLoadMore={loadMore} error={error} filters={filters} onFilterChange={(key, value) => setFilters(current => updateAdminTableFilter(current, key, value))} searchPlaceholder="Tìm nhân sự theo tên hoặc email…" minWidth="680px" emptyMessage="Không có nhân sự phù hợp." />
+      </div>
+      <div className="min-w-0">
+        <div className="border border-neutral-200 bg-white p-4">
           <h2 className="font-bold">Lời mời gần đây</h2>
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
             {invites.length ? (
               invites.map((i) => {
                 const st = inviteStatus(i);
@@ -790,7 +622,22 @@ export function UserManager() {
           </div>
         </div>
       </div>
+      </div>
     </div>
+    {inviteOpen && typeof document !== 'undefined' && createPortal(
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setInviteOpen(false); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="invite-modal-title" className="w-full max-w-md rounded-xl border border-neutral-200 bg-white shadow-2xl">
+          <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3"><h2 id="invite-modal-title" className="font-bold">Mời thành viên</h2><button type="button" onClick={() => setInviteOpen(false)} aria-label="Đóng cửa sổ mời thành viên" className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100"><X size={17} /></button></div>
+          <form onSubmit={invite} className="grid gap-3 p-4">
+            <label className="grid gap-1.5 text-xs font-semibold text-neutral-600">Email thành viên<AdminInput autoFocus name="email" type="email" placeholder="staff@example.com" required /></label>
+            <label className="grid gap-1.5 text-xs font-semibold text-neutral-600">Vai trò<AdminSelect name="role" ariaLabel="Vai trò thành viên" defaultValue="STAFF" searchable={false} options={[{ value: 'STAFF', label: 'STAFF' }, { value: 'ADMIN', label: 'ADMIN' }]} /></label>
+            {message && <p role="alert" className="break-all text-xs text-red-700">{message}</p>}
+            <div className="flex justify-end gap-2 border-t border-neutral-100 pt-3"><AdminButton type="button" variant="secondary" className="rounded-md px-3 py-2 text-xs" onClick={() => setInviteOpen(false)}>Hủy</AdminButton><AdminButton disabled={inviteSaving} className="rounded-md px-3 py-2 text-xs">{inviteSaving ? 'Đang gửi…' : 'Gửi lời mời'}</AdminButton></div>
+          </form>
+        </section>
+      </div>, document.body
+    )}
+    </>
   );
 }
 

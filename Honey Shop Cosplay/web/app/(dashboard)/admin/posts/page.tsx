@@ -1,12 +1,11 @@
 import { ContentManager } from '../../../../components/admin/ContentManager';
+import { AdminListPageHeader } from '../../../../components/admin/AdminListPageHeader';
 
-export default async function PostsPage() {
+export default function PostsPage() {
   return (
-    <div className="p-4 md:p-7">
-      <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 md:text-3xl">Bài viết</h1>
-      <div className="mt-4 md:mt-5">
-        <ContentManager type="ARTICLE" />
-      </div>
+    <div className="min-w-0">
+      <AdminListPageHeader title="Bài viết" description="Quản lý và xuất bản nội dung." />
+      <ContentManager type="ARTICLE" />
     </div>
   );
 }
