@@ -1,0 +1,5 @@
+---
+import { community } from '../data/content';
+import Willow from './Willow.astro';
+---
+<section id="community" class="community section-pad" aria-labelledby="community-title"><Willow variant="community"/><div class="community-inner"><p class="eyebrow">05 / YOU BELONG HERE</p><h2 id="community-title">Không cần trở thành ai khác.<br/><em>Chỉ cần là bạn.</em></h2><div class="community-lines">{community.map(p => <p>{p}</p>)}</div><p class="community-invitation">Chỉ cần bạn yêu thích điều này<br/>và muốn gặp những người giống mình.</p><span class="community-rule" aria-hidden="true"></span><p class="community-end">TTP Cosplay Offline không chỉ là một event.<br/>Đó là một nơi để gặp nhau.</p></div></section>

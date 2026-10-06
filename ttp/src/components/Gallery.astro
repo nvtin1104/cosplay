@@ -1,0 +1,9 @@
+---
+import Photo from './Photo.astro';
+import { photos } from '../data/content';
+---
+<section id="gallery" class="gallery section-pad" aria-labelledby="gallery-title">
+  <div class="gallery-heading"><div><p class="eyebrow">04 / MOMENTS TO KEEP</p><h2 id="gallery-title">Có những khoảnh khắc,<br/><em>muốn giữ lại lâu hơn.</em></h2></div><p>Những bộ cosplay. Những nụ cười.<br/>Và những người đã tìm thấy nhau.</p></div>
+  <div class="gallery-grid">{photos.filter(p => ['coser', 'fashion', 'award', 'dance'].includes(p.id)).map(photo => <Photo photo={photo}/>)}</div>
+  <p class="gallery-note">Album từ ngày 27.09.2026 đang được chuẩn bị. Hẹn bạn ở những khung hình thật.</p>
+</section>

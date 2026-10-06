@@ -1,0 +1,16 @@
+---
+import { Image } from 'astro:assets';
+import Willow from './Willow.astro';
+import type { Photo } from '../data/content';
+interface Props { photo: Photo; priority?: boolean; class?: string; }
+const { photo, priority = false, class: className = '' } = Astro.props;
+---
+<figure class={`photo ${photo.shape} ${className}`}>
+  <div class={`photo-frame ${photo.src ? 'has-image' : 'placeholder'} photo-${photo.id}`}>
+    {photo.src ? <Image src={photo.src} alt={photo.alt} widths={[480, 768, 1200, 1800]} sizes="(max-width: 700px) 100vw, 70vw" loading={priority ? 'eager' : 'lazy'} fetchpriority={priority ? 'high' : 'auto'} style={`object-position:${photo.position}`} /> : <>
+      <Willow variant={photo.id} />
+      <span class="placeholder-label"><span class="tiny-star">✳</span>Ảnh đang được cập nhật</span>
+    </>}
+  </div>
+  <figcaption>{photo.caption}</figcaption>
+</figure>

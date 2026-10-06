@@ -1,0 +1,28 @@
+{
+  "name": "ttp-cosplay-offline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "check": "astro check",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "verify": "node scripts/verify.mjs",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@astrojs/compiler-binding-wasm32-wasi": "0.5.1",
+    "@astrojs/sitemap": "^3.7.4",
+    "@fontsource/be-vietnam-pro": "^5.3.0",
+    "@fontsource/noto-serif": "^5.3.0",
+    "astro": "^7.3.5",
+    "typescript": "^5.9.3",
+    "vite": "8.0.16"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "lighthouse": "^13.5.0"
+  }
+}

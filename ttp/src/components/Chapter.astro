@@ -1,0 +1,9 @@
+---
+import Photo from './Photo.astro';
+import { photos } from '../data/content';
+---
+<section id="chapter" class="chapter section-pad" aria-labelledby="chapter-title">
+  <div class="chapter-heading"><div><p class="eyebrow">03 / THE FIRST CHAPTER</p><h2 id="chapter-title">Chương đầu tiên<span class="chapter-date"><time datetime="2026-09-27">27.09.2026</time></span></h2></div><p>Từ một ý tưởng đến một cuộc gặp.<br/>TTP Cosplay Offline — nơi những khoảnh khắc vốn chỉ tồn tại trên mạng trở thành một phần của đời thật.</p></div>
+  <Photo photo={photos.find(p => p.id === 'event')!}/>
+  <div class="chapter-foot"><span>FASHION SHOW / TRAO GIẢI / RANDOM DANCE / GIAO LƯU</span><p>Và đây mới chỉ là khởi đầu.</p></div>
+</section>
