@@ -26,7 +26,7 @@ try {
       await page.keyboard.press('Enter');
       assert.equal(await page.locator('.mobile-menu').getAttribute('open'), '');
       await page.keyboard.press('Tab');
-      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Về P');
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Về Phát');
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('.mobile-menu').getAttribute('open'), null);
       await menu.click();

@@ -2,7 +2,7 @@
 
 ## Kế hoạch đã chốt
 
-Landing page tiếng Việt dùng Astro + TypeScript, xuất HTML tĩnh tại `D:\project\cosplay\ttp`. Giai đoạn đầu làm source local. Theo yêu cầu tiếp theo ngày 06.10.2026, đã deploy lên Cloudflare Pages. Tập trung câu chuyện của Trần Tiến Phát (P / TTP), cộng đồng cosplay và event ngày 27.09.2026.
+Landing page tiếng Việt dùng Astro + TypeScript, xuất HTML tĩnh tại `D:\project\cosplay\ttp`. Giai đoạn đầu làm source local. Theo yêu cầu tiếp theo ngày 06.10.2026, đã deploy lên Cloudflare Pages. Tập trung câu chuyện của Trần Tiến Phát (Phát / TTP), cộng đồng cosplay và event ngày 27.09.2026.
 
 ### Thiết kế
 
@@ -15,18 +15,18 @@ Landing page tiếng Việt dùng Astro + TypeScript, xuất HTML tĩnh tại `D
 ### Bảy phần
 
 1. Hero: TTP Cosplay Offline / Một nơi để gặp nhau / Khám phá câu chuyện.
-2. About P: Trần Tiến Phát, sở thích cosplay và những người phía sau bức ảnh.
+2. About Phát: Trần Tiến Phát, sở thích cosplay và những người phía sau bức ảnh.
 3. Story: từ kết nối qua màn hình đến cuộc gặp thật và sân chơi của riêng mình.
 4. 27.09.2026: Chương đầu tiên; ảnh toàn cảnh, fashion show, trao giải, random dance và giao lưu.
 5. Gallery: ảnh lớn xen kẽ tỷ lệ dọc/ngang, có caption; chưa có lightbox/bộ lọc.
 6. Community: cộng đồng chào đón mọi người, không yêu cầu danh tiếng/follower/cosplay đắt tiền.
 7. Next Chapter: câu chuyện vẫn tiếp tục, kết nối Facebook khi có URL.
 
-Biên tập nội dung để đọc mượt, giữ giọng P và trích dẫn chủ đạo. Lưu câu chuyện gốc trong README. Không tự thêm thống kê, địa điểm, đối tác, lời chứng thực hoặc lịch mới.
+Biên tập nội dung để đọc mượt, giữ giọng Phát và trích dẫn chủ đạo. Lưu câu chuyện gốc trong README. Không tự thêm thống kê, địa điểm, đối tác, lời chứng thực hoặc lịch mới.
 
 ### Triển khai và SEO
 
-- CSS thuần, component Astro theo phần; dữ liệu TypeScript tách nội dung, thông tin P, Facebook và ảnh.
+- CSS thuần, component Astro theo phần; dữ liệu TypeScript tách nội dung, thông tin Phát, Facebook và ảnh.
 - Ảnh có nguồn, alt, caption, điểm căn ảnh; khung minh họa ghi rõ đang chờ cập nhật, không dùng ảnh event khác.
 - Ảnh thật qua `astro:assets`, responsive, kích thước cố định; lazy dưới fold, hero tải ưu tiên.
 - Chưa có Facebook: CTA về Community; có URL: “Tham gia cộng đồng”.
@@ -52,7 +52,7 @@ Biên tập nội dung để đọc mượt, giữ giọng P và trích dẫn ch
 
 ## Chờ cập nhật
 
-- [ ] Ảnh chân dung P và event thật; xác nhận caption, alt, crop, quyền sử dụng.
+- [ ] Ảnh chân dung Phát và event thật; xác nhận caption, alt, crop, quyền sử dụng.
 - [ ] URL Facebook group/fanpage.
 - [x] Hosting production và `SITE_URL` với domain Cloudflare Pages.
 - [ ] Custom domain nếu cần.

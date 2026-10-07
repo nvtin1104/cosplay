@@ -7,7 +7,7 @@ const toggle = document.querySelector<HTMLButtonElement>('.motion-toggle');
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 const chapters = [
   { id: 'top', label: 'TTP', element: document.querySelector('.hero')! },
-  ...[['about', 'Về P'], ['story', 'Câu chuyện'], ['chapter', '27.09.2026'], ['gallery', 'Khoảnh khắc'], ['community', 'Cộng đồng'], ['next', 'Chương tiếp theo']].map(([id, label]) => ({ id, label, element: document.getElementById(id)! })),
+  ...[['about', 'Về Phát'], ['story', 'Câu chuyện'], ['chapter', '27.09.2026'], ['gallery', 'Khoảnh khắc'], ['community', 'Cộng đồng'], ['next', 'Chương tiếp theo']].map(([id, label]) => ({ id, label, element: document.getElementById(id)! })),
 ];
 let paused = false;
 try { paused = sessionStorage.getItem('ttp-motion-paused') === 'true'; } catch { /* Storage is optional. */ }

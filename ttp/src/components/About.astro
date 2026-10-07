@@ -1,8 +1,8 @@
 ---
-import Photo from './Photo.astro';
-import { photos, about } from '../data/content';
+import { about } from '../data/content';
+import Willow from './Willow.astro';
 ---
 <section id="about" class="about section-pad" aria-labelledby="about-title">
-  <div class="about-visual"><span class="vertical-note">THE PERSON BEHIND THE GATHERING</span><Photo photo={photos.find(p => p.id === 'portrait')!}/><span class="handwritten">Cứ gọi mình là P.</span></div>
-  <div class="about-copy"><p class="eyebrow">01 / ABOUT P</p><h2 id="about-title">Một người thích cosplay.<br/><em>Và thích những cuộc gặp.</em></h2><p class="person-name">TRẦN TIẾN PHÁT <span>— P / TTP</span></p>{about.map(p => <p>{p}</p>)}<p class="about-last">P muốn đưa những kết nối ấy ra ngoài đời thật.</p></div>
+  <div class="about-visual"><span class="vertical-note">THE PERSON BEHIND THE GATHERING</span><figure class="photo portrait about-portrait"><div class="photo-frame about-portrait-frame"><div class="about-portrait-backdrop"><Willow variant="portrait"/></div><img src="/home/ttp.png" alt="Trần Tiến Phát — Phát, người sáng lập TTP Cosplay Offline"/></div><figcaption>Phát / TRẦN TIẾN PHÁT</figcaption></figure><span class="handwritten">Cứ gọi mình là Phát.</span></div>
+  <div class="about-copy"><p class="eyebrow">01 / ABOUT Phát</p><h2 id="about-title">Một người thích cosplay.<br/><em>Và thích những cuộc gặp.</em></h2><p class="person-name">TRẦN TIẾN PHÁT <span>— Phát / TTP</span></p>{about.map(p => <p>{p}</p>)}<p class="about-last">Phát muốn đưa những kết nối ấy ra ngoài đời thật.</p></div>
 </section>

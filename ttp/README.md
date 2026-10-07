@@ -1,6 +1,6 @@
 # TTP Cosplay Offline
 
-Landing page tiếng Việt của Trần Tiến Phát — P / TTP. Bảy phần kể chuyện, xanh rêu/nâu gỗ/kem, minh họa Dương Liễu, HTML tĩnh hỗ trợ SEO.
+Landing page tiếng Việt của Trần Tiến Phát — Phát / TTP. Bảy phần kể chuyện, xanh rêu/nâu gỗ/kem, minh họa Dương Liễu, HTML tĩnh hỗ trợ SEO.
 
 Website production: [ttp-cosplay-offline.pages.dev](https://ttp-cosplay-offline.pages.dev).
 
@@ -45,7 +45,7 @@ Máy Windows này chặn native compiler của Astro bằng Application Control.
 
 Sửa `src/data/content.ts`:
 
-- `site`: title, description, Facebook, tên và tên gọi của P.
+- `site`: title, description, Facebook, tên và tên gọi của Phát.
 - `about`, `story`, `community`: nội dung các phần.
 - `photos`: nguồn ảnh, alt, caption, position và shape.
 
@@ -67,7 +67,7 @@ import portrait from '../assets/photos/p-portrait.jpg';
 
 Các ID: `hero`, `portrait`, `event`, `coser`, `fashion`, `award`, `dance`. Bỏ `src` để dùng minh họa chờ cập nhật. Component `Photo` dùng `astro:assets` tạo ảnh responsive; ảnh bên dưới tải lazy, hero tải eager/high. Điều chỉnh `position` để căn người/chi tiết quan trọng và caption theo ảnh thực tế. Không để ảnh thật ở `public/` nếu muốn Astro tối ưu.
 
-Ưu tiên ảnh có P, P cùng coser, toàn cảnh event, fashion show, trao giải, random dance và giao lưu. Không tự diễn giải ảnh khi chưa nhận source. Kiểm tra chất lượng và crop ở cả ba kích thước sau khi thay.
+Ưu tiên ảnh có Phát, Phát cùng coser, toàn cảnh event, fashion show, trao giải, random dance và giao lưu. Không tự diễn giải ảnh khi chưa nhận source. Kiểm tra chất lượng và crop ở cả ba kích thước sau khi thay.
 
 ## SEO và domain
 
@@ -137,11 +137,11 @@ Các đầu vào còn chờ: ảnh event/chân dung, URL Facebook và custom dom
 
 ## Câu chuyện gốc
 
-Trần Tiến Phát — thường được gọi là P hoặc TTP.
+Trần Tiến Phát — thường được gọi là Phát hoặc TTP.
 
-P bắt đầu từ một người đơn giản chỉ thích cosplay, thích đi fes, thích chụp ảnh và gặp gỡ những người có cùng sở thích.
+Phát bắt đầu từ một người đơn giản chỉ thích cosplay, thích đi fes, thích chụp ảnh và gặp gỡ những người có cùng sở thích.
 
-Nhưng càng tham gia, P càng nhận ra điều mình thích nhất không hẳn là đứng trước ống kính.
+Nhưng càng tham gia, Phát càng nhận ra điều mình thích nhất không hẳn là đứng trước ống kính.
 
 Mà là những người đứng phía sau những bức ảnh đó.
 
@@ -149,7 +149,7 @@ Những người từng chỉ biết nhau qua một cái tên trên Facebook.
 Những coser chỉ gặp nhau vài phút ở một fes.
 Những người từng nói chuyện với nhau qua một chiếc màn hình.
 
-P muốn đưa tất cả những điều đó ra ngoài đời thật.
+Phát muốn đưa tất cả những điều đó ra ngoài đời thật.
 
 Và TTP Cosplay Offline bắt đầu từ ý tưởng rất đơn giản:
 
@@ -172,9 +172,9 @@ Một nơi để những người từng xa lạ trở thành bạn bè.
 Một nơi để một bộ cosplay trở thành một kỷ niệm.
 Và một nơi để những khoảnh khắc vốn chỉ tồn tại trên mạng trở thành một phần của đời thật.
 
-P không muốn chỉ là người tham gia vào những sân chơi có sẵn.
+Phát không muốn chỉ là người tham gia vào những sân chơi có sẵn.
 
-P muốn tự mình tạo ra một sân chơi.
+Phát muốn tự mình tạo ra một sân chơi.
 
 Và 27/09/2026 chỉ là chương đầu tiên.
 
