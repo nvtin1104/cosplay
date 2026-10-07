@@ -1,13 +1,9 @@
-import type { ImageMetadata } from 'astro';
-
-export type Photo = {
-  id: string;
-  src?: ImageMetadata;
-  alt: string;
-  caption: string;
-  position: string;
-  shape: 'landscape' | 'portrait';
-};
+import chapter1Poster from '../assets/moments/chapter1-poster.jpg';
+import chapter1Stage from '../assets/moments/chapter1-stage.jpg';
+import chapter1CoserPink from '../assets/moments/chapter1-coser-pink.jpg';
+import chapter1Group from '../assets/moments/chapter1-group.jpg';
+import communityPhoto1 from '../assets/moments/community-01.jpg';
+import communityPhoto2 from '../assets/moments/community-02.jpg';
 
 export const site = {
   title: 'TTP Cosplay Offline | Trần Tiến Phát',
@@ -27,15 +23,30 @@ export const story = [
   { title: 'Và một sân chơi của riêng mình', text: 'Phát không muốn chỉ là người tham gia vào những sân chơi có sẵn. Phát muốn tự mình tạo ra một sân chơi. Một nơi để những người từng xa lạ trở thành bạn bè, và một bộ cosplay trở thành một kỷ niệm.' },
 ];
 
-export const photos: Photo[] = [
-  { id: 'hero', alt: 'Phát cùng cộng đồng tại TTP Cosplay Offline', caption: 'Một nơi để gặp nhau', position: 'center', shape: 'landscape' },
-  { id: 'portrait', alt: 'Chân dung Trần Tiến Phát — Phát', caption: 'Phát / Trần Tiến Phát', position: '50% 35%', shape: 'portrait' },
-  { id: 'event', alt: 'Toàn cảnh TTP Cosplay Offline ngày 27 tháng 9 năm 2026', caption: '27.09.2026 — Chương đầu tiên', position: 'center', shape: 'landscape' },
-  { id: 'coser', alt: 'Phát gặp gỡ các coser tại event', caption: '01 / Những người cùng một tình yêu', position: 'center', shape: 'portrait' },
-  { id: 'fashion', alt: 'Khoảnh khắc fashion show tại event', caption: '02 / Khi nhân vật bước ra đời thật', position: 'center', shape: 'landscape' },
-  { id: 'award', alt: 'Khoảnh khắc trao giải tại event', caption: '03 / Những điều đáng nhớ', position: 'center', shape: 'landscape' },
-  { id: 'dance', alt: 'Random dance và giao lưu tại event', caption: '04 / Cùng nhau, trong một nhịp', position: 'center', shape: 'portrait' },
+export const moments = [
+  { src: communityPhoto1, alt: 'Cộng đồng cosplayer tại sự kiện', caption: 'Một nơi để gặp nhau' },
+  { src: chapter1Stage, alt: 'Cosplayer tạo dáng tại sân khấu TTP Cosplay Offline', caption: 'Nhân vật bước ra đời thật' },
+  { src: chapter1CoserPink, alt: 'Cosplayer tóc hồng giao lưu tại sự kiện', caption: 'Những người cùng một tình yêu' },
+  { src: communityPhoto2, alt: 'Các cosplayer cùng tạo dáng tại sự kiện', caption: 'Những gương mặt thân quen' },
+  { src: chapter1Poster, alt: 'Poster TTP Cosplay Offline với hình ảnh bờ biển Vũng Tàu', caption: 'TTP Cosplay Offline' },
+  { src: chapter1Group, alt: 'Các cosplayer chụp ảnh nhóm tại sự kiện SONO × TTP Cosplay Offline', caption: 'Cùng nhau tại SONO × TTP Cosplay Offline' },
 ];
+
+export const heroPhotos = [moments[0], moments[3]];
+
+export const chapter1 = {
+  slug: 'chapter-1',
+  title: 'Chương đầu tiên',
+  date: '27.09.2026',
+  dateTime: '2026-09-27',
+  summary: 'Từ một ý tưởng đến một cuộc gặp. TTP Cosplay Offline — nơi những khoảnh khắc vốn chỉ tồn tại trên mạng trở thành một phần của đời thật.',
+  moments: [
+    { src: chapter1Poster, alt: 'Poster TTP Cosplay Offline với hình ảnh bờ biển Vũng Tàu', caption: 'TTP Cosplay Offline' },
+    { src: chapter1Stage, alt: 'Cosplayer tạo dáng tại sân khấu TTP Cosplay Offline', caption: 'Nhân vật bước ra đời thật' },
+    { src: chapter1CoserPink, alt: 'Cosplayer tóc hồng giao lưu tại sự kiện', caption: 'Những người cùng một tình yêu' },
+    { src: chapter1Group, alt: 'Các cosplayer chụp ảnh nhóm tại sự kiện SONO × TTP Cosplay Offline', caption: 'Cùng nhau tại SONO × TTP Cosplay Offline' },
+  ],
+};
 
 export const community = [
   'Không cần phải là người nổi tiếng.',

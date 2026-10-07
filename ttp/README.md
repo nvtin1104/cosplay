@@ -47,25 +47,28 @@ Sửa `src/data/content.ts`:
 
 - `site`: title, description, Facebook, tên và tên gọi của Phát.
 - `about`, `story`, `community`: nội dung các phần.
-- `photos`: nguồn ảnh, alt, caption, position và shape.
+- `moments`: bộ ảnh, alt và caption cho mục Khoảnh khắc; nguồn tập trung trong `src/assets/moments/`.
 
 Nội dung riêng của Hero, event và Next Chapter nằm trong component tương ứng ở `src/components/`.
 
 `site.facebookUrl` mặc định trống. Điền URL Facebook group/fanpage thật để CTA cuối trang đổi thành “Tham gia cộng đồng”. Khi chưa có URL, CTA dẫn đến `#community`. Không dùng URL giả.
 
+### Chapter 1 và hành trình
+
+- `/journey/` liệt kê các chapter đã có; `/journey/chapter-1/` là trang đọc Chapter 1.
+- Chapter 1 dùng nội dung gốc trong phần “Câu chuyện gốc” bên dưới; dữ liệu ngày, mô tả và ảnh nằm trong `chapter1` ở `src/data/content.ts`.
+- Ảnh Chapter 1 và mục Khoảnh khắc được tối ưu thành WebP responsive bởi Astro từ `src/assets/moments/`. Ảnh `chip.png` được giữ riêng ở `src/assets/chapter1/`; chân dung TTP tiếp tục ở `public/home/ttp.png`.
+
 ## Thay ảnh thật
 
-Tạo thư mục `src/assets/photos/`, đặt ảnh tại đó rồi import vào `src/data/content.ts`:
+Đặt ảnh gallery trong `src/assets/moments/` rồi import vào `src/data/content.ts`:
 
 ```ts
-import portrait from '../assets/photos/p-portrait.jpg';
-// Trong mục photos có id: 'portrait':
-// src: portrait,
-// alt: 'Mô tả chính xác nội dung ảnh',
-// position: '50% 35%',
+import newMoment from '../assets/moments/new-moment.jpg';
+// Thêm vào mảng moments với src, alt và caption.
 ```
 
-Các ID: `hero`, `portrait`, `event`, `coser`, `fashion`, `award`, `dance`. Bỏ `src` để dùng minh họa chờ cập nhật. Component `Photo` dùng `astro:assets` tạo ảnh responsive; ảnh bên dưới tải lazy, hero tải eager/high. Điều chỉnh `position` để căn người/chi tiết quan trọng và caption theo ảnh thực tế. Không để ảnh thật ở `public/` nếu muốn Astro tối ưu.
+Masonry dùng tỷ lệ gốc của ảnh; mỗi ảnh có viền nền kem và tải responsive/lazy. Hai ảnh riêng cho Hero lấy từ cùng thư mục; ảnh TTP và chip không nằm trong bộ gallery.
 
 Ưu tiên ảnh có Phát, Phát cùng coser, toàn cảnh event, fashion show, trao giải, random dance và giao lưu. Không tự diễn giải ảnh khi chưa nhận source. Kiểm tra chất lượng và crop ở cả ba kích thước sau khi thay.
 

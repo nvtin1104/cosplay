@@ -1,9 +1,62 @@
 ---
-import Photo from './Photo.astro';
-import { photos } from '../data/content';
+import { Image } from 'astro:assets';
+import { moments } from '../data/content';
 ---
 <section id="gallery" class="gallery section-pad" aria-labelledby="gallery-title">
   <div class="gallery-heading"><div><p class="eyebrow">04 / MOMENTS TO KEEP</p><h2 id="gallery-title">Có những khoảnh khắc,<br/><em>muốn giữ lại lâu hơn.</em></h2></div><p>Những bộ cosplay. Những nụ cười.<br/>Và những người đã tìm thấy nhau.</p></div>
-  <div class="gallery-grid">{photos.filter(p => ['coser', 'fashion', 'award', 'dance'].includes(p.id)).map(photo => <Photo photo={photo}/>)}</div>
-  <p class="gallery-note">Album từ ngày 27.09.2026 đang được chuẩn bị. Hẹn bạn ở những khung hình thật.</p>
+  <div class="moments-masonry">{moments.map((moment, index) => <figure class="moment-card">
+    <div class="moment-frame"><Image src={moment.src} alt={moment.alt} widths={[240, 360, 540, 720, 960, 1200, 1600]} sizes="(max-width: 600px) 44vw, (max-width: 1000px) 29vw, 22vw" loading="lazy"/></div>
+    <figcaption>{moment.caption}<span>{String(index + 1).padStart(2, '0')}</span></figcaption>
+  </figure>)}</div>
+  <p class="gallery-note">Một vài khoảnh khắc từ TTP Cosplay Offline, 27.09.2026.</p>
 </section>
+<script>
+  const masonry = document.querySelector<HTMLElement>('.moments-masonry');
+  if (masonry) {
+    const cards = [...masonry.querySelectorAll<HTMLElement>('.moment-card')];
+    const mobile = window.matchMedia('(max-width: 700px)');
+    let frame = 0;
+
+    function layoutMasonry() {
+      frame = 0;
+      const columns = mobile.matches ? 2 : 3;
+      const columnGap = mobile.matches ? 14 : Math.max(18, Math.min(38, window.innerWidth * 0.025));
+      const rowGap = mobile.matches ? 14 : 28;
+      const columnWidth = (masonry!.clientWidth - columnGap * (columns - 1)) / columns;
+      if (!columnWidth) return;
+
+      masonry!.classList.add('is-masonry');
+      const columnsOfCards: { card: HTMLElement; index: number; height: number }[][] = Array.from({ length: columns }, () => []);
+      const columnHeights = Array.from({ length: columns }, () => 0);
+      const measuredCards = cards.map((card, index) => {
+        card.style.width = `${columnWidth}px`;
+        return { card, index, height: card.getBoundingClientRect().height };
+      }).sort((a, b) => b.height - a.height);
+
+      measuredCards.forEach(item => {
+        const column = columnHeights.indexOf(Math.min(...columnHeights));
+        columnsOfCards[column].push(item);
+        columnHeights[column] += item.height + rowGap;
+      });
+
+      columnsOfCards.forEach((columnCards, column) => {
+        let top = 0;
+        columnCards.sort((a, b) => a.index - b.index).forEach(item => {
+          item.card.style.left = `${column * (columnWidth + columnGap)}px`;
+          item.card.style.top = `${top}px`;
+          top += item.height + rowGap;
+        });
+      });
+      masonry!.style.height = `${Math.max(0, Math.max(...columnHeights) - rowGap)}px`;
+    }
+
+    function scheduleLayout() {
+      if (!frame) frame = requestAnimationFrame(layoutMasonry);
+    }
+
+    window.addEventListener('resize', scheduleLayout, { passive: true });
+    masonry.querySelectorAll('img').forEach(image => image.addEventListener('load', scheduleLayout, { once: true }));
+    document.fonts.ready.then(scheduleLayout);
+    scheduleLayout();
+  }
+</script>

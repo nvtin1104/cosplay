@@ -1,0 +1,12 @@
+---
+import { Image } from 'astro:assets';
+import { chapter1 } from '../data/content';
+interface Props { detail?: boolean; }
+const { detail = false } = Astro.props;
+---
+<div class:list={["chapter-mosaic", detail && "chapter-mosaic--detail"]} aria-label="Ảnh Chapter 1 TTP Cosplay Offline">
+  {chapter1.moments.map((moment, index) => <figure class={`chapter-shot chapter-shot--${index + 1}`}>
+    <Image src={moment.src} alt={moment.alt} widths={[360, 540, 720, 1000, 1400]} sizes={detail ? '(max-width: 700px) 80vw, (max-width: 1100px) 45vw, 30vw' : '(max-width: 700px) 78vw, (max-width: 1100px) 46vw, 30vw'} loading={index === 0 && !detail ? 'eager' : 'lazy'} fetchpriority={index === 0 && !detail ? 'high' : 'auto'} />
+    {detail && <figcaption>{moment.caption}</figcaption>}
+  </figure>)}
+</div>
