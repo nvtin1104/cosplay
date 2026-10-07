@@ -6,7 +6,7 @@ compatibility_date = "2026-09-19"
 CORS_ORIGIN = "https://honeyshopcosplay.likecactus.com"
 APP_URL = "https://honeyshopcosplay.likecactus.com"
 RESEND_FROM = "Honey Shop <noreply@example.com>"
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "349850714620-tmjbatjk5a6helpo20lju30e4pshei0d.apps.googleusercontent.com"
 
 [[d1_databases]]
 binding = "DB"
