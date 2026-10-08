@@ -1,13 +1,46 @@
 <header class="header">
-  <a href="#top" class="wordmark" aria-label="TTP — về đầu trang">ttp<span class="wordmark-dot">.</span></a>
+  <a href="/#top" class="wordmark" aria-label="TTP — về đầu trang chủ">ttp<span class="wordmark-dot">.</span></a>
   <nav aria-label="Điều hướng chính">
     <a href="/#about">Về Phát</a><a href="/#story">Câu chuyện</a><a href="/#chapter">27.09.2026</a><a href="/journey/">Hành trình</a><a href="/#gallery">Khoảnh khắc</a>
   </nav>
   <a class="header-connect" href="/journey/">Một nơi để gặp nhau <span aria-hidden="true">↗</span></a>
-  <details class="mobile-menu"><summary>Menu <span aria-hidden="true">＋</span></summary><nav aria-label="Điều hướng di động"><a href="/#about">Về Phát</a><a href="/#story">Câu chuyện</a><a href="/#chapter">27.09.2026</a><a href="/journey/">Hành trình</a><a href="/#gallery">Khoảnh khắc</a><a href="/#community">Cộng đồng</a></nav></details>
+  <details class="mobile-menu"><summary aria-controls="mobile-navigation">Menu <span aria-hidden="true">＋</span></summary><nav id="mobile-navigation" aria-label="Điều hướng di động"><a href="/#about">Về Phát</a><a href="/#story">Câu chuyện</a><a href="/#chapter">27.09.2026</a><a href="/journey/">Hành trình</a><a href="/#gallery">Khoảnh khắc</a><a href="/#community">Cộng đồng</a></nav></details>
 </header>
 <script>
   const menu = document.querySelector<HTMLDetailsElement>('.mobile-menu');
-  menu?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { menu.open = false; }));
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && menu?.open) { menu.open = false; menu.querySelector('summary')?.focus(); } });
+  const summary = menu?.querySelector('summary');
+  const mobile = window.matchMedia('(max-width: 600px)');
+  function closeMenu(returnFocus = false) {
+    if (!menu?.open) return;
+    menu.open = false;
+    summary?.setAttribute('aria-expanded', 'false');
+    if (returnFocus) summary?.focus({ preventScroll: true });
+  }
+  menu?.addEventListener('toggle', () => {
+    summary?.setAttribute('aria-expanded', String(menu.open));
+  });
+  summary?.setAttribute('aria-expanded', String(menu?.open ?? false));
+  menu?.querySelectorAll('a').forEach(link => link.addEventListener('click', () => closeMenu()));
+  document.addEventListener('pointerdown', event => {
+    if (event.target instanceof Node && !menu?.contains(event.target)) closeMenu();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && menu?.open) {
+      event.preventDefault();
+      closeMenu(true);
+    }
+  });
+  mobile.addEventListener('change', () => { if (!mobile.matches) closeMenu(); });
+  window.addEventListener('pagehide', () => closeMenu());
 </script>
+<style>
+  @media (max-width: 600px) {
+    .header { min-height: 82px; padding-block: 18px; transition: none; }
+    .mobile-menu { flex: none; width: 72px; }
+    .mobile-menu summary { height: 44px; padding: 0; align-items: center; justify-content: space-between; gap: 0; -webkit-tap-highlight-color: transparent; }
+    .mobile-menu summary span { width: 20px; text-align: center; line-height: 1; }
+    .mobile-menu nav { position: fixed; top: 90px; right: 24px; width: min(280px, calc(100vw - 48px)); max-height: calc(100svh - 110px); overflow-y: auto; overscroll-behavior: contain; background: var(--cream); transition: none; animation: none; }
+    .mobile-menu nav a { padding: 12px; min-height: 44px; }
+    .mobile-menu nav a::after { display: none; }
+  }
+</style>
