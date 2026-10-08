@@ -2,12 +2,23 @@
 import { Image } from 'astro:assets';
 import ChapterMosaic from './ChapterMosaic.astro';
 import { chapter1 } from '../data/content';
-import chapter1Chip from '../assets/chapter1/chip.png';
+import chapter1Chip from '../../public/home/chapter1/chip.png';
+import chapter1Main from '../../public/home/chapter1/main.jpg';
+import chapter1Moment1 from '../../public/home/chapter1/1.jpg';
+import chapter1Moment2 from '../../public/home/chapter1/2.jpg';
+import chapter1Moment5 from '../../public/home/chapter1/5.jpg';
+
+const homeMoments = [
+  { src: chapter1Main, alt: 'Poster TTP Cosplay Offline với hình ảnh bờ biển Vũng Tàu', caption: 'TTP Cosplay Offline' },
+  { src: chapter1Moment1, alt: 'Cosplayer tại Chapter 1 TTP Cosplay Offline', caption: 'Nhân vật bước ra đời thật' },
+  { src: chapter1Moment2, alt: 'Cosplayer tóc hồng và xanh tạo dáng tại Chapter 1', caption: 'Những người cùng một tình yêu' },
+  { src: chapter1Moment5, alt: 'Khoảnh khắc cosplay tại Chapter 1 TTP Cosplay Offline', caption: 'Kỷ niệm của chương đầu tiên' },
+];
 ---
 <div class="chapter-shell">
   <section id="chapter" class="chapter section-pad" aria-labelledby="chapter-title">
     <div class="chapter-heading"><div><p class="eyebrow">03 / CHAPTER 01</p><h2 id="chapter-title">{chapter1.title}<span class="chapter-date"><time datetime={chapter1.dateTime}>{chapter1.date}</time></span></h2></div><p>{chapter1.summary}</p></div>
-    <ChapterMosaic/>
+    <ChapterMosaic moments={homeMoments}/>
     <div class="chapter-foot"><span>FASHION SHOW / TRAO GIẢI / RANDOM DANCE / GIAO LƯU</span><p>Và đây mới chỉ là khởi đầu.</p></div>
     <nav class="chapter-actions" aria-label="Khám phá các chương"><a class="button" href="/journey/chapter-1/">Xem Chapter 1 <span aria-hidden="true">↗</span></a><a class="chapter-more" href="/journey/">Xem các chapter tiếp theo <span aria-hidden="true">→</span></a></nav>
   </section>
