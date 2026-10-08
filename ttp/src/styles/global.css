@@ -38,3 +38,5 @@
 .about-portrait-frame img{position:relative;z-index:1;flex:none;object-fit:contain;object-position:center bottom;height:126%;width:104%;max-width:none;transform:translate(8%,4%) rotate(-4deg) scale(1.04);transform-origin:center bottom;}
 .about-portrait-frame:after{content:"";position:absolute;left:11%;right:11%;bottom:0;height:8%;z-index:2;pointer-events:none;background:linear-gradient(180deg,#b2b49b00,#b2b49b);}
 @media(max-width:600px){.about .about-portrait-frame{aspect-ratio:4/4.5;}.about-portrait-frame img{height:122%;transform:translate(6%,4%) rotate(-4deg) scale(1.04);}}
+.next-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:16px 28px;margin-top:33px}.next-actions .button{margin-top:0}.next-facebook{gap:18px;font-size:12px}.next-facebook:hover{color:var(--olive)}
+@media(max-width:600px){.next-actions{gap:14px 22px}.next-facebook{font-size:11px}}

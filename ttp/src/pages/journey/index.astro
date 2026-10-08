@@ -1,15 +1,25 @@
 ---
+import { Image } from 'astro:assets';
 import SiteLayout from '../../layouts/SiteLayout.astro';
-import { chapter1 } from '../../data/content';
+import { journey } from '../../data/journey';
+import '../../styles/journey.css';
 ---
-<SiteLayout title="Hành trình | TTP Cosplay Offline" description="Theo dõi hành trình TTP Cosplay Offline qua từng chapter. Chapter đầu tiên bắt đầu ngày 27.09.2026.">
-  <section class="journey-page section-pad" aria-labelledby="journey-title">
-    <p class="eyebrow">TTP COSPLAY OFFLINE / HÀNH TRÌNH</p>
-    <h1 id="journey-title">Từng cuộc gặp,<br/><em>thành một câu chuyện.</em></h1>
-    <p class="journey-intro">Mỗi chapter lưu lại một chặng của TTP Cosplay Offline. Hành trình hiện có chương đầu tiên.</p>
-    <ol class="chapter-list">
-      <li><a class="chapter-card" href="/journey/chapter-1/"><span class="chapter-card-index">01</span><div><p class="eyebrow">{chapter1.date}</p><h2>{chapter1.title}</h2><p>{chapter1.summary}</p><span class="chapter-card-link">Đọc chapter <span aria-hidden="true">↗</span></span></div></a></li>
+<SiteLayout title="Hành trình | TTP Cosplay Offline" description="Từ Vũng Tàu đến Long Thành, qua Giáng sinh và thành phố ngàn hoa. Những cuộc gặp nối dài hành trình TTP Cosplay Offline.">
+  <section class="journey-page journey-road section-pad" aria-labelledby="journey-title">
+    <div class="road-intro"><p class="eyebrow">TTP COSPLAY OFFLINE / HÀNH TRÌNH</p><h1 id="journey-title">Từng cuộc gặp,<br/><em>thành một câu chuyện.</em></h1><p class="journey-intro">Một con đường, nhiều điểm hẹn. Mỗi cuộc gặp là một chương mới, đôi khi rẽ sang một nhánh nhỏ đầy kỷ niệm.</p><span class="road-season">2026 — 2027 <span aria-hidden="true">↓</span></span></div>
+    <ol class="road-list">
+      {journey.map(event => <li class:list={['road-stop', event.kind === 'branch' && 'road-stop--branch']}>
+        <span class="road-node" aria-hidden="true">{event.number}</span>
+        <div class="road-copy"><p class="eyebrow">{event.kind === 'branch' ? 'NHÁNH NHỎ / GIÁNG SINH' : `CHAPTER ${event.number}`} <span class:list={['road-status', event.done && 'road-status--done']}>{event.done ? 'Đã diễn ra' : 'Sắp tới'}</span></p><time datetime={event.dateTime}>{event.date}</time><h2>{event.title}</h2><p class="road-place">{event.venue ? <><a href={event.venueUrl} target="_blank" rel="noopener noreferrer">{event.venue}</a> – {event.place}</> : event.place}</p>{event.address && <p class="road-address">{event.address}</p>}{event.time && <p class="road-event-time">{event.time}</p>}{event.mapUrl && <a class="road-map" href={event.mapUrl} target="_blank" rel="noopener noreferrer">Xem đường đi ↗</a>}<a class="road-link" href={`/journey/${event.slug}/`}>{event.photos.length ? 'Mở album ảnh' : 'Coming soon'} <span aria-hidden="true">↗</span></a></div>
+        <a class:list={['road-cover', `road-cover--${event.composition}`, event.photos.length && 'road-cover--stack', !event.photos.length && 'road-cover--soon']} href={`/journey/${event.slug}/`} aria-label={`${event.title} — ${event.photos.length ? 'Xem ảnh' : 'Coming soon'}`}>
+          {event.photos.length ? <div class="road-photo-stack" style={`--cover-ratio:${event.photos[0].src.width / event.photos[0].src.height}`}>
+            {event.slug !== 'chapter-1' && event.photos.slice(event.mainCount, event.mainCount + 3).map((photo, index) => <span class={`road-photo-back road-photo-back--${index + 1}`} aria-hidden="true"><Image src={photo.src} alt="" widths={[240, 400]} sizes="(max-width: 900px) 38vw, 16vw" loading="lazy"/></span>)}
+            {event.photos.slice(0, event.mainCount).map((photo, index) => <span class={`road-photo-main road-photo-main--${index + 1}`}><Image src={photo.src} alt={photo.alt} widths={[360, 600, 900]} sizes={event.mainCount > 1 ? '(max-width: 900px) 30vw, 14vw' : '(max-width: 900px) 55vw, 22vw'} loading="eager"/></span>)}
+          </div> : <div class="road-placeholder"><span aria-hidden="true">{event.kind === 'branch' ? '✳' : event.number}</span><strong>Coming soon</strong><small>Những khoảnh khắc đang chờ được viết tiếp.</small></div>}
+          <span class="road-cover-caption">{event.kind === 'branch' ? 'A LITTLE DETOUR' : `CHAPTER ${event.number}`} / {event.date}</span>
+        </a>
+      </li>)}
     </ol>
-    <a class="text-link" href="/">Về trang chủ <span aria-hidden="true">↗</span></a>
+    <div class="road-ending"><span aria-hidden="true">✳</span><p>Hẹn gặp ở chặng tiếp theo.</p><a class="text-link" href="/">Về trang chủ <span aria-hidden="true">↗</span></a></div>
   </section>
 </SiteLayout>

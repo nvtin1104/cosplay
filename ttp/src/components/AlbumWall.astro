@@ -1,0 +1,27 @@
+---
+import { Image, getImage } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+interface Props { photos: { src: ImageMetadata; alt: string }[]; title: string; subtitle: string; venue?: string; address?: string; time?: string; mapUrl?: string; venueUrl?: string; }
+const { photos, title, subtitle, venue, address, time, mapUrl, venueUrl } = Astro.props;
+const originals = await Promise.all(photos.map(async photo => ({ src: (await getImage({ src: photo.src, width: Math.min(2400, photo.src.width), format: 'webp' })).src, alt: photo.alt })));
+const tiles = Array.from({length: 30}, (_, index) => ({ ...photos[index % photos.length], index: index % photos.length }));
+---
+<section class="album-wall-page" aria-label={`Album ${title}`}>
+  <h1 class="visually-hidden">{title} — {subtitle}</h1>
+  <a class="album-back" href="/journey/">← Hành trình</a>
+  <div class="album-wall" data-photos={JSON.stringify(originals)}>
+    {tiles.map((photo, index) => <a class="album-tile" href={originals[photo.index].src} data-index={photo.index} data-ratio={photo.src.width / photo.src.height} aria-label={`Xem ảnh: ${photo.alt}`}>
+      <Image src={photo.src} alt={photo.alt} widths={[320, 600, 900]} sizes="(max-width: 600px) 50vw, (max-width: 1000px) 33vw, (max-width: 1600px) 25vw, 20vw" loading={index < 10 ? 'eager' : 'lazy'}/><span class="album-tile-overlay" aria-hidden="true">Xem khoảnh khắc <span>↗</span></span>
+    </a>)}
+  </div>
+  <div class:list={['album-label', venue && 'album-label--event']}><span>{title}</span><small>{subtitle}</small>{venue && <p class="album-venue"><a href={venueUrl} target="_blank" rel="noopener noreferrer">{venue}</a> · {time}</p>}{address && <p class="album-address">{address}</p>}{mapUrl && <a class="album-map" href={mapUrl} target="_blank" rel="noopener noreferrer">Xem đường đi ↗</a>}</div>
+  <dialog class="photo-viewer" aria-label="Xem chi tiết ảnh">
+    <div class="viewer-tools"><p class="viewer-count" aria-live="polite"></p><button type="button" class="viewer-zoom" aria-label="Phóng to ảnh" aria-pressed="false">＋</button><button type="button" class="viewer-close" aria-label="Đóng ảnh">✕</button></div>
+    <button type="button" class="viewer-prev" aria-label="Ảnh trước">←</button>
+    <div class="viewer-stage"><img class="viewer-image" alt=""/><p class="viewer-caption"></p></div>
+    <button type="button" class="viewer-next" aria-label="Ảnh tiếp theo">→</button>
+  </dialog>
+</section>
+<script>
+  import '../scripts/album';
+</script>

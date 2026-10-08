@@ -1,0 +1,11 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import AlbumWall from '../../components/AlbumWall.astro';
+import { journey } from '../../data/journey';
+import '../../styles/journey.css';
+export function getStaticPaths() { return journey.map(event => ({ params: { slug: event.slug }, props: { event } })); }
+const { event } = Astro.props;
+---
+<SiteLayout immersive title={`${event.title} — ${event.place} | TTP Cosplay Offline`} description={`${event.title}, ${event.venue ? `${event.venue}, ` : ''}${event.place}, ${event.address ? `${event.address}, ` : ""}${event.date}${event.time ? `, ${event.time}` : ''}.`}>
+  {event.photos.length ? <AlbumWall photos={event.photos} title={event.title} subtitle={`${event.place} / ${event.date}`} venue={event.venue} address={event.address} time={event.time} mapUrl={event.mapUrl} venueUrl={event.venueUrl}/> : <section class="album-coming"><a class="album-back" href="/journey/">← Hành trình</a><p class="eyebrow">{event.kind === 'branch' ? 'MỘT NHÁNH NHỎ' : `CHAPTER ${event.number}`}</p><h1>Coming soon<span>.</span></h1><h2>{event.title}</h2><p>{event.place} · <time datetime={event.dateTime}>{event.date}</time></p><p class="coming-note">Những khoảnh khắc sẽ xuất hiện ở đây sau cuộc gặp.</p></section>}
+</SiteLayout>

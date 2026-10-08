@@ -47,3 +47,13 @@ footer { padding-bottom: 100px; }
   .photo-frame img, .photo-frame .willow { scale: 1 !important; }
   .button:hover, .text-link:hover span, .header-connect:hover span, .button:hover span, .journey-next:hover span { transform: none; }
 }
+/* Reserve the scrollbar lane during route changes and image dialogs. */
+html{scrollbar-gutter:stable}
+.album-wall{overflow-anchor:none}
+/* Cross-document navigation blends pages without moving their content. */
+@view-transition{navigation:auto}
+::view-transition-group(root){animation:none}
+::view-transition-old(root){animation:none;mix-blend-mode:normal}
+::view-transition-new(root){animation:route-arrive .12s linear;mix-blend-mode:normal}
+@keyframes route-arrive{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){::view-transition-new(root){animation:none}}

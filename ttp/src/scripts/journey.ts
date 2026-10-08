@@ -44,10 +44,9 @@ if ('IntersectionObserver' in window) {
       const element = entry.target as HTMLElement;
       if (!paused && !reduced.matches) {
         element.classList.add('reveal');
-        element.animate([{ transform: 'translateY(24px)' }, { transform: 'translateY(0)' }], {
-          duration: 850,
-          delay: Number(element.dataset.motionDelay || 0),
-          easing: 'cubic-bezier(.22,1,.36,1)',
+        element.animate([{ opacity: 0.94 }, { opacity: 1 }], {
+          duration: 240,
+          easing: 'ease-out',
         });
       }
       observer.unobserve(element);
