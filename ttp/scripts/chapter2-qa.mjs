@@ -18,7 +18,7 @@ try {
     assert.equal(await page.locator('h1').count(), 1);
     assert.equal(await page.locator('.album-wall, .photo-viewer').count(), 0);
     assert.equal(await page.locator('.event-poster img').count(), 2);
-    assert.equal(await page.locator('.event-venue img').count(), 4);
+    assert.equal(await page.locator('.event-hero .event-venue-photos img').count(), 4);
     assert.match(await page.locator('.event-lead').textContent(), /The Bapun 3/);
     assert.equal(await page.locator('.event-person').count(), 3);
     assert.ok(await page.locator('header').isVisible());
@@ -40,7 +40,7 @@ try {
     assert.equal(await page.locator('.event-person h3 a[href="https://www.facebook.com/hinataneko1602"]').count(), 1);
     assert.equal(await page.locator('.event-person h3 a[href="https://www.facebook.com/hien.dieu.623866"]').count(), 1);
     assert.equal(await page.locator('.event-person h3 a[href="https://www.facebook.com/ray.ray.81806"]').count(), 1);
-    assert.equal(await page.locator('.event-map[href="https://maps.app.goo.gl/QwCeGRGSwbtC9UCk8"]').count(), 2);
+    assert.equal(await page.locator('.event-map[href="https://maps.app.goo.gl/QwCeGRGSwbtC9UCk8"]').count(), 1);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `overflow at ${width}`);
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     await page.screenshot({ path: `qa/chapter2-${width}.png`, fullPage: true });
