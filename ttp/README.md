@@ -2,7 +2,7 @@
 
 Landing page tiếng Việt của Trần Tiến Phát — Phát / TTP. Bảy phần kể chuyện, xanh rêu/nâu gỗ/kem, minh họa Dương Liễu, HTML tĩnh hỗ trợ SEO.
 
-Website production: [ttp-cosplay-offline.pages.dev](https://ttp-cosplay-offline.pages.dev).
+Website production: [ttp.likecactus.com](https://ttp.likecactus.com).
 
 ## Chạy dự án
 
@@ -33,11 +33,11 @@ npm run deploy
 node scripts/verify-live.mjs
 ```
 
-`deploy` tự build, kiểm tra SEO, rồi upload bằng Wrangler 4.147.0. Mặc định `SITE_URL` là `https://ttp-cosplay-offline.pages.dev`; biến môi trường hoặc `.env` có thể thay bằng custom domain thật sau. Đăng nhập Cloudflare trên máy mới bằng `npx wrangler@4.147.0 login` trước khi deploy. Credentials do Wrangler lưu ngoài dự án, không đưa vào source.
+`deploy` tự build, kiểm tra SEO, rồi upload bằng Wrangler 4.147.0. Mặc định `SITE_URL` là `https://ttp.likecactus.com`; biến môi trường hoặc `.env` có thể thay bằng custom domain thật sau. Đăng nhập Cloudflare trên máy mới bằng `npx wrangler@4.147.0 login` trước khi deploy. Credentials do Wrangler lưu ngoài dự án, không đưa vào source.
 
 Deploy đầu tiên ngày 06.10.2026: [4bf74cd5.ttp-cosplay-offline.pages.dev](https://4bf74cd5.ttp-cosplay-offline.pages.dev). Đã kiểm tra URL production trả HTTP 200 cho trang chủ, robots, hai sitemap và ảnh chia sẻ PNG; canonical và Open Graph dùng đúng URL production.
 
-Quy trình này dùng [Cloudflare Pages Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/). Chưa kết nối Git để tự deploy theo commit, chưa gắn custom domain.
+Quy trình này dùng [Cloudflare Pages Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/). Deploy bằng direct upload; domain chính hiện tại là `ttp.likecactus.com`.
 
 Máy Windows này chặn native compiler của Astro bằng Application Control. Dự án có thêm compiler WebAssembly chính thức làm fallback; `npm ci --force` cho phép cài package WASM khai báo CPU `wasm32` trên máy x64. Không thay đổi chính sách Windows. Vite được khóa ở bản đã kiểm chứng; lockfile được lưu để tái lập cài đặt. Cảnh báo WASI experimental của Node không ảnh hưởng build.
 
@@ -82,9 +82,9 @@ npm run build
 npm run verify
 ```
 
-Domain trên chỉ minh họa cú pháp, không phải domain của TTP. Khi chưa đặt `SITE_URL`, không xuất canonical/og:url/domain giả và không tạo sitemap; robots vẫn có `Allow: /`. Khi có domain, sitemap được tạo bởi `@astrojs/sitemap`, robots trỏ đến `/sitemap-index.xml`, Person có URL website.
+Domain trong ví dụ chỉ minh họa cú pháp. Mặc định build dùng `https://ttp.likecactus.com`; `SITE_URL` có thể ghi đè cho một domain triển khai khác. Canonical và og:url luôn dùng đường dẫn sạch, sitemap và robots dùng cùng domain.
 
-Metadata: title/description tiếng Việt, Open Graph và Twitter Card; JSON-LD chỉ có Person với thông tin đã được cung cấp. Chưa tạo Event schema vì thiếu địa điểm và thông tin cần thiết. `public/social.svg` là nguồn ảnh chia sẻ, `public/social.png` là bản raster tương thích mạng xã hội; favicon là SVG.
+Metadata từng trang ở `src/data/seo.ts`: title, description, nhãn breadcrumb và nội dung ảnh chia sẻ. `npm run build` và `npm run deploy` tạo lại 7 ảnh PNG 1200×630 bằng `scripts/generate-social.mjs` (Node 24 và Chrome). Ảnh nguồn ở `src/assets/social/`, được Astro xuất với tên chứa hash để cập nhật cache khi thay ảnh. Open Graph và Twitter dùng URL ảnh tuyệt đối cùng domain chính. JSON-LD gồm Person với URL trang chủ cố định, WebSite, WebPage/CollectionPage và BreadcrumbList; không suy diễn Event schema. Favicon là SVG.
 
 ## Thiết kế
 
@@ -183,3 +183,9 @@ Và 27/09/2026 chỉ là chương đầu tiên.
 
 > “Không chỉ đi đến một nơi có cộng đồng.
 > Tự mình tạo ra nơi cộng đồng gặp nhau.”
+
+### Kiểm tra SEO và chia sẻ từng chapter
+
+`npm run verify` kiểm tra cả 7 trang trong dist: canonical, Open Graph, Twitter, ảnh PNG đúng 1200×630, JSON-LD, sitemap và nội dung riêng cho mỗi trang. `node scripts/verify-live.mjs` kiểm tra domain chính với user-agent của Facebook, gồm HTTP 200 cho từng trang và ảnh.
+
+Mỗi chapter và mỗi mục trong Hành trình có liên kết riêng và nút Chia sẻ. Thiết bị hỗ trợ dùng hộp chia sẻ hệ thống; desktop sao chép liên kết. Khi clipboard bị từ chối, hiển thị URL để sao chép thủ công; không JavaScript vẫn có liên kết thông thường. Khi cập nhật metadata, Facebook có thể còn giữ bản cũ: dùng Sharing Debugger để yêu cầu Scrape Again cho đúng URL chapter. Không cần thêm query vào URL chia sẻ chuẩn.

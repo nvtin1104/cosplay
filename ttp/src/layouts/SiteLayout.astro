@@ -15,11 +15,48 @@ import '../styles/chapter.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { site } from '../data/content';
-interface Props { title?: string; description?: string; immersive?: boolean; }
-const { title = site.title, description = site.description, immersive = false } = Astro.props;
-const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
-const socialImage = Astro.site ? new URL('social.png', Astro.site).href : '/social.png';
-const person = { '@context': 'https://schema.org', '@type': 'Person', ...site.person, ...(canonical ? { url: canonical } : {}), ...(site.facebookUrl ? { sameAs: [site.facebookUrl] } : {}) };
+import type { ImageMetadata } from 'astro';
+import { seoPages, productionSite } from '../data/seo';
+interface Props { title?: string; description?: string; immersive?: boolean; noindex?: boolean; }
+const pagePath = Astro.url.pathname.replace(/\/?$/, '/');
+const seo = seoPages.find(page => page.path === pagePath) || seoPages[0];
+const { title = seo.title, description = seo.description, immersive = false, noindex = false } = Astro.props;
+const origin = Astro.site || new URL(productionSite);
+const canonical = new URL(pagePath, origin).href;
+const cards = import.meta.glob<{ default: ImageMetadata }>('../assets/social/*.png', { eager: true });
+const card = cards[`../assets/social/${seo.key}.png`].default;
+const socialImage = new URL(card.src, origin).href;
+const home = new URL('/', origin).href;
+const person = { '@context': 'https://schema.org', '@type': 'Person', '@id': `${home}#person`, ...site.person, url: home, ...(site.facebookUrl ? { sameAs: [site.facebookUrl] } : {}) };
+const breadcrumbs = [{ name: 'Trang chủ', item: home }, ...(pagePath !== '/' ? [{ name: 'Hành trình', item: new URL('/journey/', origin).href }] : []), ...(pagePath.startsWith('/journey/') && pagePath !== '/journey/' ? [{ name: seo.label, item: canonical }] : [])];
+const pageSchema = { '@context': 'https://schema.org', '@graph': [
+  { '@type': 'WebSite', '@id': `${home}#website`, url: home, name: 'TTP Cosplay Offline', inLanguage: 'vi-VN' },
+  { '@type': pagePath === '/journey/' ? 'CollectionPage' : 'WebPage', '@id': `${canonical}#webpage`, url: canonical, name: title, description, inLanguage: 'vi-VN', isPartOf: { '@id': `${home}#website` }, primaryImageOfPage: { '@type': 'ImageObject', url: socialImage, width: card.width, height: card.height }, breadcrumb: { '@id': `${canonical}#breadcrumb` } },
+  { '@type': 'BreadcrumbList', '@id': `${canonical}#breadcrumb`, itemListElement: breadcrumbs.map((entry, index) => ({ '@type': 'ListItem', position: index + 1, ...entry })) },
+] };
 ---
 <!doctype html>
-<html lang="vi"><head><meta charset="UTF-8"/>{fontPreloads.map(href => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin="anonymous"/>)}<meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="theme-color" content="#354638"/><title>{title}</title><meta name="description" content={description}/>{canonical && <link rel="canonical" href={canonical}/>}<meta property="og:type" content="website"/><meta property="og:locale" content="vi_VN"/><meta property="og:site_name" content="TTP Cosplay Offline"/><meta property="og:title" content={title}/><meta property="og:description" content={description}/>{canonical && <meta property="og:url" content={canonical}/>}<meta property="og:image" content={socialImage}/><meta property="og:image:alt" content="TTP Cosplay Offline — Một nơi để gặp nhau"/><meta name="twitter:card" content="summary_large_image"/><meta name="twitter:title" content={title}/><meta name="twitter:description" content={description}/><meta name="twitter:image" content={socialImage}/><link rel="icon" href="/favicon.svg" type="image/svg+xml"/><script type="application/ld+json" set:html={JSON.stringify(person).replace(/</g, '\\u003c')}/></head><body id="top" class:list={[immersive && "immersive-page"]}><a class="skip-link" href="#main">Đến nội dung chính</a>{!immersive && <Header/>}<main id="main"><slot/></main>{!immersive && <Footer/>}</body></html>
+<html lang="vi" prefix="og: https://ogp.me/ns#">
+  <head>
+    <meta charset="UTF-8"/>
+    {fontPreloads.map(href => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin="anonymous"/>)}
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="theme-color" content="#354638"/>
+    <meta name="robots" content={noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large'}/>
+    <title>{title}</title><meta name="description" content={description}/>
+    {!noindex && <link rel="canonical" href={canonical}/>}
+    <meta property="og:type" content="website"/><meta property="og:locale" content="vi_VN"/>
+    <meta property="og:site_name" content="TTP Cosplay Offline"/>
+    <meta property="og:title" content={title}/><meta property="og:description" content={description}/>
+    <meta property="og:url" content={canonical}/>
+    <meta property="og:image" content={socialImage}/><meta property="og:image:secure_url" content={socialImage}/>
+    <meta property="og:image:type" content="image/png"/><meta property="og:image:width" content={String(card.width)}/><meta property="og:image:height" content={String(card.height)}/>
+    <meta property="og:image:alt" content={`${seo.label} — ${seo.detail}`}/>
+    <meta name="twitter:card" content="summary_large_image"/><meta name="twitter:title" content={title}/><meta name="twitter:description" content={description}/>
+    <meta name="twitter:image" content={socialImage}/><meta name="twitter:image:alt" content={`${seo.label} — ${seo.detail}`}/>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+    <script type="application/ld+json" set:html={JSON.stringify(person).replace(/</g, '\\u003c')}/>
+    {!noindex && <script type="application/ld+json" set:html={JSON.stringify(pageSchema).replace(/</g, '\\u003c')}/>}
+  </head>
+  <body id="top" class:list={[immersive && 'immersive-page']}><a class="skip-link" href="#main">Đến nội dung chính</a>{!immersive && <Header/>}<main id="main"><slot/></main>{!immersive && <Footer/>}</body>
+</html>

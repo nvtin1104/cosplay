@@ -5,10 +5,11 @@ import { parseEnv } from 'node:util';
 const fileEnv = existsSync('.env') ? parseEnv(readFileSync('.env', 'utf8')) : {};
 const env = {
   ...process.env,
-  SITE_URL: process.env.SITE_URL?.trim() || fileEnv.SITE_URL?.trim() || 'https://ttp-cosplay-offline.pages.dev',
+  SITE_URL: process.env.SITE_URL?.trim() || fileEnv.SITE_URL?.trim() || 'https://ttp.likecactus.com',
 };
 if (!process.env.npm_execpath) throw new Error('Run this script with npm run deploy.');
 const commands = [
+  [process.execPath, ['scripts/generate-social.mjs']],
   [process.execPath, ['node_modules/astro/bin/astro.mjs', 'build']],
   [process.execPath, ['scripts/verify.mjs']],
   [process.execPath, [process.env.npm_execpath, 'exec', '--yes', '--package=wrangler@4.147.0', '--', 'wrangler', 'pages', 'deploy', 'dist', '--project-name', 'ttp-cosplay-offline', '--branch', 'main', '--commit-dirty=true']],

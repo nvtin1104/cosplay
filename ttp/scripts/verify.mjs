@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { parseEnv } from 'node:util';
-const configuredSite = (process.env.SITE_URL || (existsSync('.env') ? parseEnv(readFileSync('.env', 'utf8')).SITE_URL : ''))?.trim();
+const configuredSite = (process.env.SITE_URL || (existsSync('.env') ? parseEnv(readFileSync('.env', 'utf8')).SITE_URL : '') || 'https://ttp.likecactus.com')?.trim();
 const html = readFileSync('dist/index.html', 'utf8');
 assert.match(html, /<html lang="vi"/);
 assert.equal((html.match(/<h1\b/g) || []).length, 1);
@@ -29,3 +29,5 @@ if (configuredSite) {
   assert.ok(!person.url);
 }
 console.log('Verified: Vietnamese static content, headings, anchors, metadata, Person JSON-LD and domain-dependent SEO.');
+
+await import('./verify-seo.mjs');

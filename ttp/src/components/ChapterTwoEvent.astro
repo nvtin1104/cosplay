@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import { chapter2Details, journey } from '../data/journey';
 import '../styles/chapter-event.css';
+import ShareLink from './ShareLink.astro';
 const event = journey.find(event => event.slug === 'chapter-2')!;
 ---
 <article class="chapter-event">
@@ -23,6 +24,7 @@ const event = journey.find(event => event.slug === 'chapter-2')!;
       <a href="#timeline">Timeline ↓</a><a href="#judges">Ban giám khảo ↓</a>
     </nav>
     <p class="event-description">{chapter2Details.description}</p>
+    <ShareLink/>
     </div>
     </div>
   </section>

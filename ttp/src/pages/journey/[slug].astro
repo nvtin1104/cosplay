@@ -2,14 +2,14 @@
 import SiteLayout from '../../layouts/SiteLayout.astro';
 import AlbumWall from '../../components/AlbumWall.astro';
 import ChapterTwoEvent from '../../components/ChapterTwoEvent.astro';
-import { chapter2Details, journey } from '../../data/journey';
+import ShareLink from '../../components/ShareLink.astro';
+import { journey } from '../../data/journey';
 import '../../styles/journey.css';
 export function getStaticPaths() { return journey.map(event => ({ params: { slug: event.slug }, props: { event } })); }
 const { event } = Astro.props;
 const isChapterTwo = event.slug === 'chapter-2';
-const title = isChapterTwo ? `${chapter2Details.title} — Timeline & Ban giám khảo | TTP` : `${event.title} — ${event.place} | TTP Cosplay Offline`;
-const description = isChapterTwo ? 'TTP Cosplay Offline SS2: Long Thành ngày 18.10.2026 tại The Bapun 3. Xem timeline Fashion Show, Karaoke Battle, Random Dance và ban giám khảo Hinata Neko, Hiền Diệu, Ray Ray.' : `${event.title}, ${event.venue ? `${event.venue}, ` : ''}${event.place}, ${event.address ? `${event.address}, ` : ''}${event.date}${event.time ? `, ${event.time}` : ''}.`;
 ---
-<SiteLayout immersive={!isChapterTwo} title={title} description={description}>
+<SiteLayout immersive={!isChapterTwo}>
+  {!isChapterTwo && <ShareLink floating/>}
   {isChapterTwo ? <ChapterTwoEvent/> : event.photos.length ? <AlbumWall photos={event.photos} title={event.title} subtitle={`${event.place} / ${event.date}`} venue={event.venue} address={event.address} time={event.time} mapUrl={event.mapUrl} venueUrl={event.venueUrl}/> : <section class="album-coming"><a class="album-back" href="/journey/">← Hành trình</a><p class="eyebrow">{event.kind === 'branch' ? 'MỘT NHÁNH NHỎ' : `CHAPTER ${event.number}`}</p><h1>Coming soon<span>.</span></h1><h2>{event.title}</h2><p>{event.place} · <time datetime={event.dateTime}>{event.date}</time></p><p class="coming-note">Những khoảnh khắc sẽ xuất hiện ở đây sau cuộc gặp.</p></section>}
 </SiteLayout>
