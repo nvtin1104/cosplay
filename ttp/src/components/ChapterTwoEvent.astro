@@ -1,0 +1,50 @@
+---
+import { Image } from 'astro:assets';
+import { chapter2Details, journey } from '../data/journey';
+import '../styles/chapter-event.css';
+const event = journey.find(event => event.slug === 'chapter-2')!;
+---
+<article class="chapter-event">
+  <section class="event-hero event-wrap" aria-labelledby="event-title">
+    <a class="event-back" href="/journey/">← Hành trình</a>
+    <p class="eyebrow">CHAPTER 02 / MỘT ĐIỂM HẸN MỚI</p>
+    <h1 id="event-title">TTP Cosplay Offline SS2:<br/><em>Long Thành</em></h1>
+    <p class="event-lead">Cùng nhau tạo nên những khoảnh khắc đẹp.</p>
+    <div class="event-facts">
+      <div><span>NGÀY HẸN</span><time datetime={event.dateTime}>{event.date}</time><p>{event.time}</p></div>
+      <div><span>ĐIỂM HẸN</span><strong>{event.venue}</strong><p>{event.address}</p></div>
+    </div>
+    <nav class="event-actions" aria-label="Thông tin sự kiện">
+      <a class="event-map" href={event.mapUrl} target="_blank" rel="noopener noreferrer">Xem đường đi ↗</a>
+      <a href="#timeline">Timeline ↓</a><a href="#judges">Ban giám khảo ↓</a>
+    </nav>
+    <p class="event-description">{chapter2Details.description}</p>
+  </section>
+  <section id="timeline" class="event-timeline event-wrap" aria-labelledby="timeline-title">
+    <div class="event-section-heading"><p class="eyebrow">01 / NHỊP ĐIỆU CỦA CUỘC HẸN</p><h2 id="timeline-title">Timeline<em> trong ngày.</em></h2><p>Từ sàn diễn đến những giai điệu, hẹn bạn cùng hòa nhịp.</p></div>
+    <ol class="event-schedule">
+      {chapter2Details.timeline.map((item, index) => <li>
+        <time datetime={`${event.dateTime}T${item.time}:00+07:00`}>{item.time}</time>
+        <div><span class="eyebrow">HOẠT ĐỘNG 0{index + 1}</span><h3>{item.title}</h3><p>{item.description}</p></div>
+        <span class="schedule-arrow" aria-hidden="true">↗</span>
+      </li>)}
+    </ol>
+    <p class="event-note">Lưu ý từ BTC: Timeline có thể linh động tùy tình hình thực tế.</p>
+  </section>
+  <section id="judges" class="event-judges event-wrap" aria-labelledby="judges-title">
+    <div class="event-section-heading"><p class="eyebrow">02 / NHỮNG NGƯỜI ĐỒNG HÀNH</p><h2 id="judges-title">Gặp gỡ<em> ban giám khảo.</em></h2><p>Những cá tính và hành trình riêng, cùng gặp nhau tại TTP SS2.</p></div>
+    {chapter2Details.judges.map((group, index) => <div class:list={['event-judge-group', index === 1 && 'event-judge-group--duo']}>
+      <figure class="event-poster"><Image src={group.poster} alt={group.alt} widths={[360, 540, 800, 1100]} sizes="(max-width: 800px) calc(100vw - 64px), 40vw" loading="lazy"/></figure>
+      <div class="event-judge-copy">{group.people.map(person => <section class="event-person" aria-label={person.name}>
+        <p class="eyebrow">{person.tagline}</p>
+        <h3><a href={person.url} target="_blank" rel="noopener noreferrer">{person.name}<span aria-hidden="true"> ↗</span></a></h3>
+        {person.paragraphs.map(paragraph => <p>{paragraph}</p>)}
+      </section>)}</div>
+    </div>)}
+  </section>
+  <section class="event-venue event-wrap" aria-labelledby="venue-title">
+    <figure><Image src={event.photos[0].src} alt={event.photos[0].alt} widths={[400, 700, 1100]} sizes="(max-width: 800px) calc(100vw - 48px), 45vw" loading="lazy"/></figure>
+    <div><p class="eyebrow">03 / HẸN GẶP TẠI LONG THÀNH</p><h2 id="venue-title">{event.venue}</h2><p>{event.address}</p><a class="event-map" href={event.mapUrl} target="_blank" rel="noopener noreferrer">Xem đường đi ↗</a><a class="event-venue-link" href={event.venueUrl} target="_blank" rel="noopener noreferrer">Facebook The Bapun 3 ↗</a></div>
+  </section>
+  <div class="event-ending event-wrap"><p>Hẹn gặp bạn tại TTP Cosplay Offline SS2!</p><a href="/journey/">← Trở về Hành trình</a></div>
+</article>
