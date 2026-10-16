@@ -18,14 +18,17 @@ try {
     assert.equal(await page.locator('h1').count(), 1);
     assert.equal(await page.locator('.album-wall, .photo-viewer').count(), 0);
     assert.equal(await page.locator('.event-poster img').count(), 2);
-    assert.equal(await page.locator('.event-hero .event-venue-photos img').count(), 4);
+    assert.equal(await page.locator('.event-hero img').count(), 1);
+    assert.equal(await page.locator('#venue img').count(), 4);
+    assert.ok(!(await page.locator('.event-hero').textContent()).includes('Hẻm 3'));
+    assert.match(await page.locator('#venue').textContent(), /Hẻm 3/);
     assert.match(await page.locator('.event-lead').textContent(), /The Bapun 3/);
     assert.equal(await page.locator('.event-person').count(), 3);
     assert.ok(await page.locator('header').isVisible());
     assert.equal(await page.locator('footer').count(), 1);
     assert.deepEqual(await page.locator('.event-schedule time').allTextContents(), ['15:30', '16:30', '17:30']);
     assert.ok(await page.evaluate(() => !!(document.querySelector('#timeline').compareDocumentPosition(document.querySelector('#judges')) & Node.DOCUMENT_POSITION_FOLLOWING)));
-    for (const anchor of ['timeline', 'judges']) {
+    for (const anchor of ['timeline', 'judges', 'venue']) {
       await page.locator(`.event-actions a[href="#${anchor}"]`).click();
       assert.equal(new URL(page.url()).hash, `#${anchor}`);
     }
