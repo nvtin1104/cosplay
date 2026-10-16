@@ -9,7 +9,7 @@ const event = journey.find(event => event.slug === 'chapter-2')!;
     <a class="event-back" href="/journey/">← Hành trình</a>
     <p class="eyebrow">CHAPTER 02 / MỘT ĐIỂM HẸN MỚI</p>
     <h1 id="event-title">TTP Cosplay Offline SS2:<br/><em>Long Thành</em></h1>
-    <p class="event-lead">Cùng nhau tạo nên những khoảnh khắc đẹp.</p>
+    <p class="event-lead">Hẹn gặp tại <a href={event.venueUrl} target="_blank" rel="noopener noreferrer">{event.venue}</a> — cùng nhau tạo nên những khoảnh khắc đẹp.</p>
     <div class="event-facts">
       <div><span>NGÀY HẸN</span><time datetime={event.dateTime}>{event.date}</time><p>{event.time}</p></div>
       <div><span>ĐIỂM HẸN</span><strong>{event.venue}</strong><p>{event.address}</p></div>
@@ -43,7 +43,12 @@ const event = journey.find(event => event.slug === 'chapter-2')!;
     </div>)}
   </section>
   <section class="event-venue event-wrap" aria-labelledby="venue-title">
-    <figure><Image src={event.photos[0].src} alt={event.photos[0].alt} widths={[400, 700, 1100]} sizes="(max-width: 800px) calc(100vw - 48px), 45vw" loading="lazy"/></figure>
+    <div class="event-venue-photos road-cover road-cover--offset road-cover--stack" role="group" aria-label="Không gian The Bapun 3">
+      <div class="road-photo-stack" style={`--cover-ratio:${event.photos[0].src.width / event.photos[0].src.height}`}>
+        {event.photos.slice(1).map((photo, index) => <figure class={`road-photo-back road-photo-back--${index + 1}`}><Image src={photo.src} alt={photo.alt} widths={[240, 400, 600]} sizes="(max-width: 800px) 40vw, 20vw" loading="lazy"/></figure>)}
+        <figure class="road-photo-main"><Image src={event.photos[0].src} alt={event.photos[0].alt} widths={[360, 600, 900]} sizes="(max-width: 800px) 60vw, 30vw" loading="lazy"/></figure>
+      </div>
+    </div>
     <div><p class="eyebrow">03 / HẸN GẶP TẠI LONG THÀNH</p><h2 id="venue-title">{event.venue}</h2><p>{event.address}</p><a class="event-map" href={event.mapUrl} target="_blank" rel="noopener noreferrer">Xem đường đi ↗</a><a class="event-venue-link" href={event.venueUrl} target="_blank" rel="noopener noreferrer">Facebook The Bapun 3 ↗</a></div>
   </section>
   <div class="event-ending event-wrap"><p>Hẹn gặp bạn tại TTP Cosplay Offline SS2!</p><a href="/journey/">← Trở về Hành trình</a></div>

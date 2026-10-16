@@ -18,7 +18,8 @@ try {
     assert.equal(await page.locator('h1').count(), 1);
     assert.equal(await page.locator('.album-wall, .photo-viewer').count(), 0);
     assert.equal(await page.locator('.event-poster img').count(), 2);
-    assert.equal(await page.locator('.event-venue img').count(), 1);
+    assert.equal(await page.locator('.event-venue img').count(), 4);
+    assert.match(await page.locator('.event-lead').textContent(), /The Bapun 3/);
     assert.equal(await page.locator('.event-person').count(), 3);
     assert.ok(await page.locator('header').isVisible());
     assert.equal(await page.locator('footer').count(), 1);
@@ -31,7 +32,10 @@ try {
     for (const image of await page.locator('.chapter-event img').all()) {
       await image.scrollIntoViewIfNeeded();
       await image.evaluate(img => img.decode());
-      assert.ok(await image.evaluate(img => img.naturalWidth > 0 && Math.abs(img.width / img.height - img.naturalWidth / img.naturalHeight) < 0.02));
+      assert.ok(await image.evaluate(img => img.naturalWidth > 0));
+      if (!await image.evaluate(img => !!img.closest('.road-photo-back'))) {
+        assert.ok(await image.evaluate(img => Math.abs(img.width / img.height - img.naturalWidth / img.naturalHeight) < 0.02));
+      }
     }
     assert.equal(await page.locator('.event-person h3 a[href="https://www.facebook.com/hinataneko1602"]').count(), 1);
     assert.equal(await page.locator('.event-person h3 a[href="https://www.facebook.com/hien.dieu.623866"]').count(), 1);
